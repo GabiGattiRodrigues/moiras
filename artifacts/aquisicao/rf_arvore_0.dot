@@ -1,0 +1,29 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname="helvetica"] ;
+edge [fontname="helvetica"] ;
+0 [label="mês = mar <= 0.5\nsamples = 100.0%\nvalue = [0.89, 0.11]\nclass = fica/não", fillcolor="#e89152"] ;
+1 [label="resultado campanha anterior = nonexistent <= 0.5\nsamples = 98.6%\nvalue = [0.89, 0.11]\nclass = fica/não", fillcolor="#e89051"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label="idade <= 58.5\nsamples = 13.3%\nvalue = [0.74, 0.26]\nclass = fica/não", fillcolor="#eeac7d"] ;
+1 -> 2 ;
+3 [label="dias desde último contato <= 5.5\nsamples = 12.1%\nvalue = [0.77, 0.23]\nclass = fica/não", fillcolor="#eda673"] ;
+2 -> 3 ;
+4 [label="(...)", fillcolor="#C0C0C0"] ;
+3 -> 4 ;
+5 [label="(...)", fillcolor="#C0C0C0"] ;
+3 -> 5 ;
+8 [label="samples = 1.2%\nvalue = [0.46, 0.54]\nclass = evento", fillcolor="#dfeffb"] ;
+2 -> 8 ;
+9 [label="mês = oct <= 0.5\nsamples = 85.3%\nvalue = [0.92, 0.08]\nclass = fica/não", fillcolor="#e78d4b"] ;
+1 -> 9 ;
+10 [label="idade <= 60.5\nsamples = 84.4%\nvalue = [0.92, 0.08]\nclass = fica/não", fillcolor="#e78c4b"] ;
+9 -> 10 ;
+11 [label="(...)", fillcolor="#C0C0C0"] ;
+10 -> 11 ;
+94 [label="(...)", fillcolor="#C0C0C0"] ;
+10 -> 94 ;
+95 [label="samples = 0.9%\nvalue = [0.58, 0.42]\nclass = fica/não", fillcolor="#f8dbc6"] ;
+9 -> 95 ;
+96 [label="samples = 1.4%\nvalue = [0.52, 0.48]\nclass = fica/não", fillcolor="#fdf5f0"] ;
+0 -> 96 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+}

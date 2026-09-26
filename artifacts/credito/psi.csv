@@ -1,0 +1,17 @@
+variavel,psi
+renda_mensal,0.0003899926018939081
+renda_per_capita,0.0002974918878997638
+SCORE (prob. XGBoost),0.00024374750360311987
+dependentes,0.00020447596817739234
+linhas_credito,0.0001435964204401412
+uso_limite,0.00010549730289102296
+razao_divida,9.990015637087328e-05
+idade,7.723882434537187e-05
+financ_imoveis,2.5756728970290038e-05
+atrasos_total,5.264367834045792e-06
+atraso_30_59,1.473870595523635e-06
+atraso_90,0.0
+renda_faltante,0.0
+atraso_codigo,0.0
+atraso_60_89,0.0
+tem_atraso_grave,0.0

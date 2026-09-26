@@ -1,0 +1,33 @@
+digraph Tree {
+node [shape=box, style="filled, rounded", color="black", fontname="helvetica"] ;
+edge [fontname="helvetica"] ;
+0 [label="resultado campanha anterior = success <= 0.5\nsamples = 100.0%\nvalue = [0.89, 0.11]\nclass = fica/não", fillcolor="#e89152"] ;
+1 [label="mês = oct <= 0.5\nsamples = 96.7%\nvalue = [0.91, 0.09]\nclass = fica/não", fillcolor="#e88e4e"] ;
+0 -> 1 [labeldistance=2.5, labelangle=45, headlabel="True"] ;
+2 [label="canal = telephone <= 0.5\nsamples = 95.3%\nvalue = [0.91, 0.09]\nclass = fica/não", fillcolor="#e88e4d"] ;
+1 -> 2 ;
+3 [label="mês = sep <= 0.5\nsamples = 59.3%\nvalue = [0.88, 0.12]\nclass = fica/não", fillcolor="#e99254"] ;
+2 -> 3 ;
+4 [label="(...)", fillcolor="#C0C0C0"] ;
+3 -> 4 ;
+63 [label="(...)", fillcolor="#C0C0C0"] ;
+3 -> 63 ;
+64 [label="mês = may <= 0.5\nsamples = 36.1%\nvalue = [0.96, 0.04]\nclass = fica/não", fillcolor="#e68742"] ;
+2 -> 64 ;
+65 [label="(...)", fillcolor="#C0C0C0"] ;
+64 -> 65 ;
+82 [label="(...)", fillcolor="#C0C0C0"] ;
+64 -> 82 ;
+95 [label="samples = 1.4%\nvalue = [0.64, 0.36]\nclass = fica/não", fillcolor="#f4c9aa"] ;
+1 -> 95 ;
+96 [label="estado civil = single <= 0.5\nsamples = 3.3%\nvalue = [0.35, 0.65]\nclass = evento", fillcolor="#a5d2f3"] ;
+0 -> 96 [labeldistance=2.5, labelangle=-45, headlabel="False"] ;
+97 [label="idade <= 43.5\nsamples = 1.9%\nvalue = [0.35, 0.65]\nclass = evento", fillcolor="#a5d2f3"] ;
+96 -> 97 ;
+98 [label="samples = 0.9%\nvalue = [0.45, 0.55]\nclass = evento", fillcolor="#dceefa"] ;
+97 -> 98 ;
+99 [label="samples = 1.1%\nvalue = [0.28, 0.72]\nclass = evento", fillcolor="#84c2ef"] ;
+97 -> 99 ;
+100 [label="samples = 1.4%\nvalue = [0.35, 0.65]\nclass = evento", fillcolor="#a5d2f3"] ;
+96 -> 100 ;
+}

@@ -1,0 +1,39 @@
+{
+  "titulo": "Aquisição de produto: quem aceita um depósito a prazo?",
+  "base": "Bank Marketing (UCI, banco português, 2008–2010, campanhas por telefone)",
+  "evento": "aceitou o depósito",
+  "unidade": "cliente",
+  "validacao": "Split estratificado 80/20. Validação cruzada 5 dobras só no treino escolhe o modelo.",
+  "periodo_treino": "80% dos contatos, sorteados",
+  "periodo_teste": "20% dos contatos, sorteados",
+  "acao": "ligação de venda",
+  "valor_evento": 100,
+  "sucesso_acao": 1.0,
+  "custo_acao": 20,
+  "texto_valor": "margem de uma conversão",
+  "texto_acao": "custo de uma ligação",
+  "notas": [
+    "A coluna `duration` (duração da ligação) foi descartada: só existe depois da ligação e inflaria o modelo.",
+    "As variáveis macro (euribor, emprego, confiança) também foram descartadas: identificam a época da campanha, não o cliente.",
+    "Testei validação fora do tempo (treino nos 80% mais antigos, teste nos 20% mais recentes): o desempenho despenca e varia de 0,45 a 0,75 de AUC entre os modelos, porque a taxa de conversão vai de 6% para 31% e os juros saem da faixa do treino. O split aleatório superestima o desempenho que se teria numa campanha futura.",
+    "Base de 2008–2010 em Portugal: não representa a realidade atual nem brasileira."
+  ],
+  "arvore_dt": {
+    "profundidade": 6,
+    "folhas": 16,
+    "auc": 0.7461517200103778,
+    "gini": 0.49230344002075554,
+    "ks": 0.3400632105287985,
+    "pr_auc": 0.3381557712625741,
+    "brier": 0.08429942584523406,
+    "logloss": 0.2975212281256196
+  },
+  "rf_n_arvores": 300,
+  "rf_top_auc": 0.752539034860135,
+  "n_treino": 32950,
+  "n_teste": 8238,
+  "taxa_treino": 0.11265553869499241,
+  "taxa_teste": 0.11264870114105366,
+  "escolhido": "XGBoost",
+  "melhor_cv": "XGBoost"
+}

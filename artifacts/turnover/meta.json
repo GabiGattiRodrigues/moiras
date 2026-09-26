@@ -1,0 +1,38 @@
+{
+  "titulo": "Turnover (Tomoyo): quem tende a sair da empresa?",
+  "base": "IBM HR Analytics Employee Attrition (Kaggle) — base FICTÍCIA criada por cientistas de dados da IBM",
+  "evento": "saída voluntária",
+  "unidade": "funcionário",
+  "validacao": "Split estratificado 75/25. Validação cruzada 5x3 repetida só no treino escolhe o modelo.",
+  "periodo_treino": "—",
+  "periodo_teste": "25% dos funcionários, sorteados",
+  "acao": "programa de retenção",
+  "valor_evento": 60000,
+  "sucesso_acao": 0.3,
+  "custo_acao": 4000,
+  "texto_valor": "custo de substituir quem sai",
+  "texto_acao": "conversa/ação de retenção",
+  "notas": [
+    "Base fictícia: serve para comparar modelos, não para tirar conclusões sobre pessoas reais.",
+    "Só 237 saídas em 1.470 funcionários: o teste tem ~59 eventos, então as métricas de teste são ruidosas.",
+    "Em People Analytics o uso correto é risco agregado por área/perfil, não decidir sobre um indivíduo."
+  ],
+  "arvore_dt": {
+    "profundidade": 5,
+    "folhas": 17,
+    "auc": 0.705693598815205,
+    "gini": 0.41138719763041,
+    "ks": 0.3583456749492623,
+    "pr_auc": 0.3724897557705287,
+    "brier": 0.12724034672533122,
+    "logloss": 0.42036027506844376
+  },
+  "rf_n_arvores": 300,
+  "rf_top_auc": 0.7515769842575833,
+  "n_treino": 1102,
+  "n_teste": 368,
+  "taxa_treino": 0.16152450090744103,
+  "taxa_teste": 0.16032608695652173,
+  "escolhido": "Regressão logística",
+  "melhor_cv": "Regressão logística"
+}
