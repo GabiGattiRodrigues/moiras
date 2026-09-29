@@ -10,7 +10,6 @@ from moiras.lang import L
 
 ROOT = Path(__file__).resolve().parent
 ART = ROOT / "artifacts"
-DASH_URL = "https://dashboardinteligente.streamlit.app"
 
 h1, h2 = st.columns([2, 3], vertical_alignment="center")
 with h1:
@@ -22,18 +21,17 @@ with h1:
 with h2:
     st.title("Moiras")
     st.markdown(L(
-        "#### Quatro famílias de modelo disputam cada case com a mesma régua. **Quem ganha é o resultado, não a premissa.**",
-        "#### Four model families compete on each case with the same ruler. **The result wins, not the assumption.**",
+        "#### Seis famílias de modelo disputam cada case com a mesma régua. **Quem ganha é o resultado, não a premissa.**",
+        "#### Six model families compete on each case with the same ruler. **The result wins, not the assumption.**",
     ))
-    st.link_button(L("Ver o Dashboard Inteligente ↗", "See the Intelligent Dashboard ↗"), DASH_URL)
 
 st.markdown(L(
     "Modelo de propensão costuma morrer num notebook com um AUC bonito e uma escolha feita por hábito. Aqui, para cada case, "
-    "**regressão logística, árvore de decisão, random forest e XGBoost** competem na mesma validação, e a vencedora sai de uma "
+    "**regressão logística, árvore de decisão, random forest, XGBoost, LightGBM e CatBoost** competem na mesma validação, e a vencedora sai de uma "
     "regra definida antes de rodar: **entre os modelos a menos de 1 erro-padrão do melhor, vence o mais simples**. "
     "Depois vêm o ponto de corte por custo, a explicação e as limitações de cada base.",
     "Propensity models usually die in a notebook with a nice-looking AUC and a choice made out of habit. Here, for each "
-    "case, **logistic regression, decision tree, random forest and XGBoost** compete on the same validation, and the "
+    "case, **logistic regression, decision tree, random forest, XGBoost, LightGBM and CatBoost** compete on the same validation, and the "
     "winner comes from a rule set before running anything: **among models within 1 standard error of the best, the "
     "simplest one wins**. Then come the cost-based cutoff, the explanation, and each dataset's limitations.",
 ))
@@ -98,5 +96,4 @@ with c4:
     ))
 
 st.divider()
-st.caption("Moiras · Gabriela Gatti Rodrigues · [LinkedIn](https://linkedin.com/in/gabriela-gatti-rodrigues) · "
-           f"[{L('Dashboard Inteligente', 'Intelligent Dashboard')}]({DASH_URL})")
+st.caption("Moiras · Gabriela Gatti Rodrigues · [LinkedIn](https://linkedin.com/in/gabriela-gatti-rodrigues)")

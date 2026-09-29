@@ -1,0 +1,49 @@
+variavel,shap_medio_abs
+canal = telephone,0.38756318642448767
+mês = may,0.2118280448727847
+dias desde último contato,0.1287884741453838
+idade,0.11462440938532541
+inadimplente = unknown,0.10985975173866495
+mês = jul,0.09750408850956521
+contatos nesta campanha,0.09215960025200777
+mês = nov,0.08479951294607427
+mês = aug,0.08472865040994976
+mês = jun,0.048848949680830075
+dia da semana = mon,0.04767314177792655
+escolaridade = university.degree,0.04512456051659705
+profissão = blue-collar,0.032880911641996066
+mês = mar,0.030315525043072063
+nunca_contatado_antes,0.02795977994495726
+estado civil = single,0.02759627111731209
+mês = oct,0.026430021321485468
+contatos anteriores,0.018910045375321198
+mês = sep,0.01774025287307755
+financ. imobiliário = yes,0.016238047284862254
+profissão = services,0.013215298166150776
+resultado campanha anterior = success,0.01261362623422591
+profissão = student,0.010807541359461855
+dia da semana = wed,0.009888366849004113
+profissão = retired,0.00828410350219392
+mês = dec,0.008133140415405547
+resultado campanha anterior = nonexistent,0.007368547342596721
+escolaridade = basic.9y,0.006674756834833661
+escolaridade = unknown,0.006329861466205391
+profissão = technician,0.006105981157857427
+dia da semana = thu,0.0055294129759643935
+escolaridade = basic.6y,0.005426308461687763
+estado civil = married,0.005274777337531395
+dia da semana = tue,0.005213504912811361
+empréstimo pessoal = yes,0.004511232398718358
+escolaridade = professional.course,0.0038525068059528217
+escolaridade = high.school,0.0033201094513075967
+profissão = unknown,0.0022881268946984496
+profissão = entrepreneur,0.0022303011626064605
+profissão = management,0.0016954280382956203
+profissão = unemployed,0.001435230918961312
+profissão = housemaid,0.0011632316261267776
+profissão = self-employed,0.000842957677140866
+financ. imobiliário = unknown,0.0008398925662213672
+empréstimo pessoal = unknown,0.00032357828711973016
+escolaridade = illiterate,0.00027468356254421896
+estado civil = unknown,0.00025736690385047285
+inadimplente = yes,0.0

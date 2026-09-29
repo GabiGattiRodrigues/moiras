@@ -14,8 +14,8 @@ from moiras.lang import L, lang
 
 ROOT = Path(__file__).resolve().parent.parent
 AZUL, AZUL_ESC, CINZA, VERM, VERDE = "#1f5fbf", "#0b2a5b", "#9aa5b1", "#d1495b", "#2a9d6f"
-COR = {"Regressão logística": AZUL, "Árvore de decisão": "#e0a030", "Random forest": VERDE, "XGBoost": VERM}
-DASH_URL = "https://dashboardinteligente.streamlit.app"
+COR = {"Regressão logística": AZUL, "Árvore de decisão": "#e0a030", "Random forest": VERDE, "XGBoost": VERM,
+       "LightGBM": "#8a5fd1", "CatBoost": "#c77b2e"}
 
 MODELO_EN = {"Regressão logística": "Logistic regression", "Árvore de decisão": "Decision tree",
              "Random forest": "Random forest", "XGBoost": "XGBoost"}
@@ -62,13 +62,21 @@ def carregar(caso: str) -> dict:
     d = ROOT / "artifacts" / caso
     r = lambda n: pd.read_csv(d / n)
     rf_dots = [(d / f"rf_arvore_{i}.dot").read_text(encoding="utf-8") for i in range(6) if (d / f"rf_arvore_{i}.dot").exists()]
-    return {
+    dados = {
         "meta": json.loads((d / "meta.json").read_text(encoding="utf-8")), "cmp": r("comparacao.csv"), "scores": r("scores_teste.csv"),
         "imp": r("importancia.csv"), "coef": r("logistica_coef.csv"), "dt_dot": (d / "arvore_dt.dot").read_text(encoding="utf-8"),
         "dec": {m: r(f"decis_{s}.csv") for m, s in SLUG.items()},
         "cal": {m: r(f"calibracao_{s}.csv") for m, s in SLUG.items()},
         "rf_ranking": r("rf_ranking.csv"), "rf_dots": rf_dots,
     }
+    if (d / "logistica_contrib.csv").exists():
+        dados["lr_contrib"] = pd.read_csv(d / "logistica_contrib.csv", index_col=0)
+        dados["lr_valores"] = pd.read_csv(d / "logistica_valores.csv", index_col=0)
+    if (d / "shap_valores.csv").exists():
+        dados["shap"] = pd.read_csv(d / "shap_valores.csv", index_col=0)
+        dados["shap_feat"] = pd.read_csv(d / "shap_features.csv", index_col=0)
+        dados["shap_imp"] = r("shap_importancia.csv")
+    return dados
 
 
 def mnome(m: str) -> str:
@@ -117,27 +125,35 @@ def render(caso: str) -> None:
 
     # ------------------------------------------------------------ disputa
     with t1:
-        st.subheader(L("Quatro famílias, uma régua só", "Four families, one single ruler"))
+        st.subheader(L("Seis famílias, uma régua só", "Six families, one single ruler"))
         st.markdown(L(
-            f"**Como ler esta página, em miúdos:** cada uma das 4 famílias tentou adivinhar, para cada {unidade}, "
+            f"**Como ler esta página, em miúdos:** cada uma das 6 famílias tentou adivinhar, para cada {unidade}, "
             f"a chance de {evento}. Testamos cada uma várias vezes, embaralhando quem entra no treino e quem "
             "entra na validação, e medimos o quanto cada uma acerta com a **AUC** (uma nota de 50%, que é chutar cara ou "
-            "coroa, a 100%, que é acertar sempre). Isso dá uma nota com uma margem de erro (o **± EP**, erro-padrão): "
-            "duas notas que se sobrepõem dentro dessa margem são, no fundo, um empate.",
-            f"**How to read this page, plainly:** each of the 4 families tried to guess, for every {unidade}, "
+            "coroa, a 100%, que é acertar sempre). Isso dá uma nota com um intervalo de confiança (o **± EP**, "
+            "erro-padrão, aproximadamente 68% de confiança): duas notas cujos intervalos se sobrepõem são, no fundo, um empate.",
+            f"**How to read this page, plainly:** each of the 6 families tried to guess, for every {unidade}, "
             f"the chance of {evento}. We tested each one several times, reshuffling who's in training and who's in "
             "validation, and measured how well each does with **AUC** (a grade from 50%, a coin flip, to 100%, "
-            "always right). That gives a grade with a margin of error (the **± SE**, standard error): two grades "
-            "that overlap within that margin are, in practice, a tie.",
+            "always right). That gives a grade with a confidence interval (the **± SE**, standard error, roughly "
+            "68% confidence): two grades whose intervals overlap are, in practice, a tie.",
+        ))
+        st.caption(L(
+            "**Por que AUC para escolher?** Ela resume bem a capacidade de *ordenar* risco/propensão sem depender "
+            "de um corte específico. Mas não conta tudo: por isso a tabela abaixo também traz KS e Brier, e a aba "
+            "Decisão usa o resultado esperado (não a AUC) para decidir até onde vale a pena agir.",
+            "**Why AUC to choose?** It summarizes well how the model *ranks* risk/propensity without depending on "
+            "any particular cutoff. But it doesn't tell the whole story: that's why the table below also shows KS "
+            "and Brier, and the Decision tab uses expected result (not AUC) to decide how far it's worth acting.",
         ))
         st.markdown(L(
             "**A regra de escolha, definida antes de rodar:** entre os modelos empatados com o melhor (dentro de 1 erro-padrão), "
-            "vence o **mais simples** (logística < árvore < random forest < XGBoost) — porque um modelo mais simples é mais "
+            "vence o **mais simples** (logística < árvore < random forest < XGBoost/LightGBM/CatBoost, esses três últimos empatados em complexidade) — porque um modelo mais simples é mais "
             "fácil de explicar e de manter, e não vale a pena pagar esse preço só por um empate técnico. "
             "O teste final (a coluna com o losango ◆ no gráfico) é dado que nenhum modelo usou para se ajustar; ele só confirma "
             "a escolha, nunca decide.",
             "**The selection rule, set before running anything:** among models tied with the best one (within 1 "
-            "standard error), the **simplest** wins (logistic < decision tree < random forest < XGBoost) — because "
+            "standard error), the **simplest** wins (logistic < decision tree < random forest < XGBoost/LightGBM/CatBoost, the latter three tied in complexity) — because "
             "a simpler model is easier to explain and maintain, and it's not worth paying that price for a merely "
             "technical tie. The final test set (the column with the ◆ diamond on the chart) is data no model used "
             "to fit itself; it only confirms the choice, never decides it.",
@@ -185,6 +201,14 @@ def render(caso: str) -> None:
         a, b = st.columns(2)
         with a:
             st.markdown(L("**Lift por decil de risco** (1 = maior risco previsto)", "**Lift by risk decile** (1 = highest predicted risk)"))
+            st.caption(L(
+                f"Ordenamos os {unidade}s do mais para o menos propenso e cortamos em 10 fatias iguais. **Decil 1 = os "
+                f"10% com maior probabilidade prevista de {evento}; decil 10 = os 10% com menor probabilidade.** "
+                "Quanto maior o decil, menor a probabilidade do evento.",
+                f"We sort the {unidade}s from most to least likely and cut them into 10 equal slices. **Decile 1 = "
+                f"the 10% with the highest predicted probability of {evento}; decile 10 = the 10% with the lowest.** "
+                "The higher the decile, the lower the event's probability.",
+            ))
             fig = go.Figure()
             for m in cmp_.modelo:
                 fig.add_scatter(x=D["dec"][m].decil, y=D["dec"][m].lift, mode="lines+markers", name=mnome(m), line_color=COR[m],
@@ -203,6 +227,20 @@ def render(caso: str) -> None:
             fig.update_layout(height=320, margin=dict(t=10), xaxis_title=L("Prob. média prevista", "Mean predicted prob."),
                               yaxis_title=L("Taxa real", "Real rate"))
             st.plotly_chart(fig, width="stretch")
+
+        if esc in ("XGBoost", "LightGBM", "CatBoost"):
+            with st.expander(L(f"Hiperparâmetros do modelo vencedor ({esc}) e onde ele fica salvo",
+                                f"Winning model's hyperparameters ({mnome(esc)}) and where it's saved")):
+                params = json.loads(e.loc[esc, "params"])
+                st.markdown("\n".join(f"- `{k}`: **{v}**" for k, v in params.items()))
+                st.caption(L(
+                    "Escolhidos por busca em grade com validação cruzada (nunca no teste). O modelo treinado com "
+                    "essa configuração é o mesmo que gera os gráficos e o simulador desta página — **é ele que "
+                    "seria salvo para produção**, não uma versão recriada depois.",
+                    "Chosen by grid search with cross-validation (never on the test set). The model trained with "
+                    "this configuration is the same one behind this page's charts and simulator — **it's this "
+                    "exact model that would be saved for production**, not a version recreated afterward.",
+                ))
 
     # ------------------------------------------------------------ decisão
     acao = _m(meta, caso, "acao")
@@ -330,6 +368,97 @@ def render(caso: str) -> None:
             st.plotly_chart(fig, width="stretch")
         st.caption(L("Não conhece \"importância por permutação\" ou \"razão de chances\"? Veja a aba **Conceitos** no menu.",
                    "Don't know \"permutation importance\" or \"odds ratio\"? See the **Concepts** tab in the menu."))
+
+        if "shap" in D:
+            st.divider()
+            st.markdown(L(f"**Explicação em log-odds do vencedor ({esc}), caso por caso (SHAP)**",
+                        f"**Log-odds explanation of the winner ({mnome(esc)}), case by case (SHAP)**"))
+            st.caption(L(
+                "**O que é log-odds, rapidinho:** o modelo não soma probabilidades diretamente (10% + 10% não vira "
+                "20% de risco real). Ele soma tudo numa escala chamada **log-odds**, que vai de −∞ a +∞ e soma "
+                "normalmente; só no final essa soma vira probabilidade. O que importa aqui é o **sinal** (vermelho "
+                "empurra o risco para cima, azul para baixo) e o **tamanho da barra**.",
+                "**What log-odds means, quickly:** the model doesn't add up probabilities directly (10% + 10% "
+                "isn't really 20% risk). It adds everything up on a scale called **log-odds**, which runs from "
+                "−∞ to +∞ and adds normally; only at the end does that sum become a probability. What matters "
+                "here is the **sign** (red pushes risk up, blue pushes it down) and the **bar's size**.",
+            ))
+            sa, sb = st.columns([2, 3])
+            with sa:
+                st.markdown(L("**Importância global** (|SHAP| médio)", "**Global importance** (mean |SHAP|)"))
+                simp = D["shap_imp"].head(10).iloc[::-1]
+                figsi = go.Figure(go.Bar(x=simp.shap_medio_abs, y=simp.variavel, orientation="h", marker_color=AZUL))
+                figsi.update_layout(height=380, margin=dict(t=10),
+                                    xaxis_title=L("Impacto médio no log-odds", "Mean impact on log-odds"), yaxis_title="")
+                st.plotly_chart(figsi, width="stretch")
+            with sb:
+                st.markdown(L(f"**Um {unidade} por vez**", f"**One {unidade} at a time**"))
+                probs_sh = 1 / (1 + np.exp(-(meta["shap_base"] + D["shap"].sum(axis=1))))
+                if f"seed_shap_{caso}" not in st.session_state:
+                    st.session_state[f"seed_shap_{caso}"] = 0
+                if st.button(L(f"Sortear outro {unidade}", f"Draw another {unidade}"), key=f"shap_sim_{caso}"):
+                    st.session_state[f"seed_shap_{caso}"] += 1
+                idxs = probs_sh.sample(1, random_state=st.session_state[f"seed_shap_{caso}"]).index[0]
+                contribs = D["shap"].loc[idxs]
+                valss = D["shap_feat"].loc[idxs]
+                tbs = pd.DataFrame({"variavel": contribs.index, "shap": contribs.values, "valor": valss.values})
+                tbs = tbs.reindex(tbs.shap.abs().sort_values(ascending=False).index).head(8).iloc[::-1]
+                nds = "n/a" if lang() == "en" else "n/d"
+                tbs["rotulo"] = tbs.apply(lambda r: f"{r.variavel} = {r.valor:g}" if pd.notna(r.valor) else f"{r.variavel} = {nds}", axis=1)
+                st.markdown(L(f"**Caso #{idxs}** · probabilidade prevista de {evento}: **{probs_sh[idxs]:.1%}** "
+                            f"(média da base: {sc.y.mean():.1%}).",
+                            f"**Case #{idxs}** · predicted probability of {evento}: **{probs_sh[idxs]:.1%}** "
+                            f"(base average: {sc.y.mean():.1%})."))
+                figsb = go.Figure(go.Bar(x=tbs.shap, y=tbs.rotulo, orientation="h",
+                                         marker_color=[VERM if v > 0 else AZUL for v in tbs.shap]))
+                figsb.update_layout(height=380, margin=dict(t=10),
+                                    xaxis_title=L("Contribuição no log-odds (vermelho ↑ risco, azul ↓ risco)",
+                                                  "Contribution to log-odds (red ↑ risk, blue ↓ risk)"), yaxis_title="")
+                st.plotly_chart(figsb, width="stretch")
+            st.caption(L("O SHAP soma as contribuições em log-odds a partir do risco médio da base; a soma vira a "
+                       "probabilidade acima. Número no gráfico e número do texto são o mesmo. Não conhece o SHAP? "
+                       "Veja a aba **Conceitos** no menu.",
+                       "SHAP adds up log-odds contributions starting from the base's average risk; that sum becomes "
+                       "the probability above. The chart number and the text number are the same. Don't know SHAP? "
+                       "See the **Concepts** tab in the menu."))
+
+        if "lr_contrib" in D:
+            st.divider()
+            st.markdown(L("**Simulador da regressão logística: um caso por vez**",
+                        "**Logistic regression simulator: one case at a time**"))
+            st.caption(L(
+                "Do mesmo jeito que o XGBoost soma contribuições em log-odds, a regressão logística também: cada "
+                "variável contribui `coeficiente × valor padronizado`, a soma (+ o intercepto) vira log-odds, e o "
+                "log-odds vira a probabilidade abaixo. Funciona mesmo quando a logística não é o modelo escolhido "
+                "deste case — serve para comparar como cada família \"pensa\".",
+                "The same way XGBoost adds up log-odds contributions, logistic regression does too: each variable "
+                "contributes `coefficient × standardized value`, the sum (+ the intercept) becomes log-odds, and "
+                "the log-odds becomes the probability below. This works even when logistic regression isn't this "
+                "case's chosen model — it's here to compare how each family \"thinks\".",
+            ))
+            contrib, vals = D["lr_contrib"], D["lr_valores"]
+            probs_lr = 1 / (1 + np.exp(-(meta.get("logistica_intercepto", 0.0) + contrib.sum(axis=1))))
+            if "seed_lr" not in st.session_state:
+                st.session_state.seed_lr = 0
+            if st.button(L("Sortear outro caso", "Draw another case"), key=f"lr_sim_{caso}"):
+                st.session_state.seed_lr += 1
+            idx = probs_lr.sample(1, random_state=st.session_state.seed_lr).index[0]
+            tb = pd.DataFrame({"variavel": contrib.columns, "contrib": contrib.loc[idx].values, "valor": vals.loc[idx].values})
+            tb = tb.reindex(tb.contrib.abs().sort_values(ascending=False).index).head(8).iloc[::-1]
+            nd = "n/a" if lang() == "en" else "n/d"
+            tb["rotulo"] = tb.apply(lambda r: f"{r.variavel} = {r.valor:g}" if pd.notna(r.valor) else f"{r.variavel} = {nd}", axis=1)
+            faixa_lr = probs_lr[idx]
+            st.markdown(L(f"**Caso #{idx}** · probabilidade prevista pela logística: **{faixa_lr:.1%}** "
+                        f"(média da base: {sc.y.mean():.1%}).",
+                        f"**Case #{idx}** · probability predicted by logistic regression: **{faixa_lr:.1%}** "
+                        f"(base average: {sc.y.mean():.1%})."))
+            figl = go.Figure(go.Bar(x=tb.contrib, y=tb.rotulo, orientation="h",
+                                    marker_color=[VERM if v > 0 else AZUL for v in tb.contrib]))
+            figl.update_layout(height=340, margin=dict(t=10),
+                               xaxis_title=L("Contribuição no log-odds (vermelho ↑ risco, azul ↓ risco)",
+                                             "Contribution to log-odds (red ↑ risk, blue ↓ risk)"), yaxis_title="")
+            st.plotly_chart(figl, width="stretch")
+
         st.divider()
         dtm = meta["arvore_dt"]
         st.markdown(L(

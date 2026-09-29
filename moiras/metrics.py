@@ -84,3 +84,29 @@ def profit_curve(y, p, gain_bom: float, perda_mau: float, n: int = 200) -> pd.Da
                      "inadimplencia_aprovados": maus / max(aprov.sum(), 1),
                      "lucro": bons * gain_bom - maus * perda_mau})
     return pd.DataFrame(rows)
+
+
+def profit_by_decile(y, p, gain_bom: float, perda_mau: float) -> pd.DataFrame:
+    """Lucro esperado cortando por decil de risco, em vez de por probabilidade contínua.
+
+    Decil 1 = 10% mais arriscado, decil 10 = 10% mais seguro (mesma convenção de decile_table).
+    Cada linha ``n`` responde: "e se eu aprovar os n decis mais seguros (10, 9, ..., 10-n+1)?" —
+    é assim que uma política de crédito real costuma cortar, por faixa, não por casa decimal de probabilidade.
+    """
+    y, p = np.asarray(y), np.asarray(p)
+    ordem = np.argsort(p)  # do mais seguro (menor p) para o mais arriscado
+    yo = y[ordem]
+    n_total = len(p)
+    rows = []
+    for n in range(1, 11):
+        k = int(round(n_total * n / 10))
+        k = max(k, 1)
+        aprov_y = yo[:k]
+        # corte = maior probabilidade ainda aprovada (fronteira do decil aprovado)
+        corte = float(p[ordem][:k].max()) if k > 0 else 0.0
+        bons = int((aprov_y == 0).sum())
+        maus = int((aprov_y == 1).sum())
+        rows.append({"decis_aprovados": n, "corte": corte, "aprovacao": k / n_total,
+                     "inadimplencia_aprovados": maus / max(k, 1),
+                     "lucro": bons * gain_bom - maus * perda_mau})
+    return pd.DataFrame(rows)

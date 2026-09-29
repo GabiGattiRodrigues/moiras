@@ -17,6 +17,7 @@
     "Só 237 saídas em 1.470 funcionários: o teste tem ~59 eventos, então as métricas de teste são ruidosas.",
     "Em People Analytics o uso correto é risco agregado por área/perfil, não decidir sobre um indivíduo."
   ],
+  "logistica_intercepto": -2.724772810947096,
   "arvore_dt": {
     "profundidade": 5,
     "folhas": 17,

@@ -11,9 +11,10 @@ import xgboost as xgb
 from moiras.compare import SLUG
 from moiras.credito import ENTRADAS, FAIXA_DESC, RENAME, faixa, padronizar, prepare
 from moiras.lang import L, lang
-from moiras.metrics import profit_curve, psi
+from moiras.metrics import profit_by_decile, profit_curve, psi
 
-COR4 = {"Regressão logística": "#1f5fbf", "Árvore de decisão": "#e0a030", "Random forest": "#2a9d6f", "XGBoost": "#d1495b"}
+COR4 = {"Regressão logística": "#1f5fbf", "Árvore de decisão": "#e0a030", "Random forest": "#2a9d6f",
+        "XGBoost": "#d1495b", "LightGBM": "#8a5fd1", "CatBoost": "#c77b2e"}
 
 ART = Path(__file__).parent / "artifacts" / "credito"
 DASH_URL = "https://dashboardinteligente.streamlit.app"
@@ -198,25 +199,36 @@ t1, t2, t3, t4, t5, t6 = st.tabs(abas)
 
 # ------------------------------------------------------------------ 1 modelo
 with t1:
-    st.subheader(L("Quatro famílias de modelo, uma disputa só", "Four model families, one single competition"))
+    st.subheader(L("Seis famílias de modelo, uma disputa só", "Six model families, one single competition"))
     st.markdown(L(
-        "**Como ler esta página, em miúdos:** regressão logística, árvore de decisão, random forest e XGBoost tentaram, cada "
+        "**Como ler esta página, em miúdos:** regressão logística, árvore de decisão, random forest, XGBoost, LightGBM e CatBoost tentaram, cada "
         "um do seu jeito, prever a chance de um cliente não pagar. Testamos cada um várias vezes, embaralhando quem entra "
         "no treino, e medimos o quanto cada um acerta com a **AUC** (uma nota de 50%, que é chutar cara ou coroa, a 100%, "
-        "que é acertar sempre). A nota vem com uma margem de erro (o **± EP**); duas notas que se sobrepõem dentro dessa "
-        "margem são, no fundo, um empate.",
-        "**How to read this page, plainly:** logistic regression, decision tree, random forest and XGBoost each tried, "
+        "que é acertar sempre). A nota vem com um intervalo de confiança (**± EP**, aproximadamente 68% de confiança — um "
+        "erro-padrão para cada lado); duas notas cujos intervalos se sobrepõem são, no fundo, um empate.",
+        "**How to read this page, plainly:** logistic regression, decision tree, random forest, XGBoost, LightGBM and CatBoost each tried, "
         "in their own way, to predict the chance a customer won't pay. We tested each one several times, reshuffling "
         "who's in the training fold, and measured how well each one does with **AUC** (a grade from 50%, a coin flip, "
-        "to 100%, always right). That grade comes with a margin of error (the **± SE**); two grades that overlap "
-        "within that margin are, in practice, a tie.",
+        "to 100%, always right). That grade comes with a confidence interval (the **± SE**, roughly 68% confidence — "
+        "one standard error on each side); two grades whose intervals overlap are, in practice, a tie.",
+    ))
+    st.caption(L(
+        "**Por que AUC para escolher, e não outra métrica?** AUC resume bem a capacidade do modelo de *ordenar* risco, "
+        "sem depender de um ponto de corte específico — é por isso que ela decide a disputa acima. Mas AUC não conta "
+        "toda a história: ela ignora se a probabilidade em si está calibrada (por isso olhamos também o Brier) e ignora "
+        "o custo de errar (por isso a aba Decisão usa lucro esperado, não AUC, para achar o corte).",
+        "**Why AUC to choose, and not another metric?** AUC summarizes well how the model *ranks* risk, without "
+        "depending on any particular cutoff — that's why it decides the contest above. But AUC doesn't tell the "
+        "whole story: it ignores whether the probability itself is calibrated (which is why we also look at Brier) "
+        "and ignores the cost of being wrong (which is why the Decision tab uses expected profit, not AUC, to find "
+        "the cutoff).",
     ))
     st.markdown(L(
         "**A regra de escolha, definida antes de rodar:** entre os modelos empatados com o melhor (dentro de 1 erro-padrão), "
-        "vence o **mais simples** (logística < árvore < random forest < XGBoost) — um modelo mais simples é mais fácil de "
+        "vence o **mais simples** (logística < árvore < random forest < XGBoost/LightGBM/CatBoost, esses três últimos empatados em complexidade) — um modelo mais simples é mais fácil de "
         "explicar e manter, então só vale trocar por um mais complexo se ele realmente entregar mais.",
         "**The selection rule, set before running anything:** among models tied with the best one (within 1 standard "
-        "error), the **simplest** wins (logistic < decision tree < random forest < XGBoost) — a simpler model is "
+        "error), the **simplest** wins (logistic < decision tree < random forest < XGBoost/LightGBM/CatBoost, the latter three tied in complexity) — a simpler model is "
         "easier to explain and maintain, so it's only worth switching to a more complex one if it truly delivers more.",
     ))
     if "cmp" in D:
@@ -252,17 +264,36 @@ with t1:
         st.dataframe(show.style.format({show.columns[1]: "{:.4f}", show.columns[2]: "{:.4f}", show.columns[3]: "{:.4f}",
                                         show.columns[4]: "{:.3f}", show.columns[5]: "{:.4f}"}), width="stretch", hide_index=True)
         st.caption(L(
-            "AUC de validação: busca em grade com validação cruzada de 3 dobras, só no treino (o que decide a escolha). "
+            "**O que é \"busca em grade com validação cruzada de 3 dobras\":** para cada família de modelo, testamos "
+            "várias combinações de configuração (por exemplo, quão profunda pode ser uma árvore) — isso é a **grade**. "
+            "Para avaliar cada combinação sem espiar o teste, dividimos o treino em 3 partes (**3 dobras**): treinamos "
+            "em 2 delas e medimos a AUC na 3ª que sobrou, revezando qual parte fica de fora, 3 vezes. A AUC de validação "
+            "acima é a média dessas 3 medições — e é ela, não o teste, que decide a escolha. "
             "AUC/KS/Brier de teste: nos 30 mil clientes que nenhum modelo usou para se ajustar (só confirma, não decide). "
             "O XGBoost do resto desta página usa early stopping em vez da grade, por isso os números de teste da aba variam um pouco.",
-            "Validation AUC: grid search with 3-fold cross-validation, only on the training data (this decides the "
-            "choice). Test AUC/KS/Brier: on the 30k customers no model used to fit itself (only confirms, doesn't "
+            "**What \"grid search with 3-fold cross-validation\" means:** for each model family, we test several "
+            "configuration combinations (for example, how deep a tree is allowed to be) — that's the **grid**. To "
+            "score each combination without peeking at the test set, we split the training data into 3 parts "
+            "(**3 folds**): train on 2 of them and measure AUC on the 3rd that's left over, rotating which part is "
+            "held out, 3 times. The validation AUC above is the average of those 3 measurements — and it's that "
+            "number, not the test set, that decides the choice. "
+            "Test AUC/KS/Brier: on the 30k customers no model used to fit itself (only confirms, doesn't "
             "decide). The XGBoost used in the rest of this page uses early stopping instead of the grid, so the "
             "test numbers on this tab vary slightly.",
         ))
         a, b = st.columns(2)
         with a:
             st.markdown(L("**Lift por decil de risco** (1 = maior risco previsto)", "**Lift by risk decile** (1 = highest predicted risk)"))
+            st.caption(L(
+                "**Como funciona o decil:** ordenamos os clientes do mais arriscado para o menos arriscado e cortamos em "
+                "10 fatias de tamanho igual. **Decil 1 = os 10% com maior probabilidade prevista de calote; decil 10 = os "
+                "10% com menor probabilidade.** Quanto maior o decil, menor a probabilidade do evento — é exatamente "
+                "esse degrau, decil a decil, que mostra se o modelo está separando risco de verdade.",
+                "**How the decile works:** we sort customers from riskiest to safest and cut them into 10 equal-size "
+                "slices. **Decile 1 = the 10% with the highest predicted default probability; decile 10 = the 10% "
+                "with the lowest.** The higher the decile, the lower the event's probability — that step-down, "
+                "decile by decile, is exactly what shows whether the model is truly separating risk.",
+            ))
             f = go.Figure()
             for m in ct.modelo:
                 f.add_scatter(x=D["cmp_dec"][m].decil, y=D["cmp_dec"][m].lift, mode="lines+markers",
@@ -289,8 +320,34 @@ with t1:
         "**No `scale_pos_weight`, on purpose.** Reweighting the rare class improves recall but distorts the "
         "probability; since the probability here becomes price and limit, I kept the model calibrated.",
     ))
+    with st.expander(L("Hiperparâmetros do modelo vencedor (XGBoost) e onde ele fica salvo",
+                        "Winning model's hyperparameters (XGBoost) and where it's saved")):
+        pxgb = M["params_xgb"]
+        st.markdown(L(
+            f"- Profundidade máxima da árvore: **{pxgb['max_depth']}**\n"
+            f"- Peso mínimo por folha (`min_child_weight`): **{pxgb['min_child_weight']}**\n"
+            f"- Amostragem de linhas por árvore (`subsample`): **{pxgb['subsample']}**\n"
+            f"- Nº de árvores escolhido por early stopping: **{pxgb['n_arvores']}**\n\n"
+            "Escolhidos por grade pequena + early stopping numa validação separada do teste (nunca no teste). "
+            "**O modelo treinado com essa configuração foi salvo** (`xgb.json`) e é ele — não uma versão recriada — "
+            "que roda em todas as abas desta página; é isso que \"ir para produção\" significa aqui: o mesmo "
+            "artefato treinado é o que pontua os clientes novos, não um retrain a cada vez.",
+            f"- Max tree depth: **{pxgb['max_depth']}**\n"
+            f"- Minimum weight per leaf (`min_child_weight`): **{pxgb['min_child_weight']}**\n"
+            f"- Row subsampling per tree (`subsample`): **{pxgb['subsample']}**\n"
+            f"- Number of trees chosen by early stopping: **{pxgb['n_arvores']}**\n\n"
+            "Chosen with a small grid + early stopping on a validation split separate from the test set (never "
+            "on the test set). **The model trained with this configuration was saved** (`xgb.json`) and it's that "
+            "exact model — not a recreated version — running throughout this page; that's what \"going to "
+            "production\" means here: the same trained artifact scores new customers, not a retrain every time.",
+        ))
     with st.expander(L("Tabela de decis (XGBoost, versão com early stopping usada no resto da página)",
                         "Decile table (XGBoost, early-stopping version used in the rest of the page)")):
+        st.caption(L("Decil 1 = 10% dos clientes com maior probabilidade prevista de calote; decil 10 = 10% com menor "
+                     "probabilidade. `p_medio` é a probabilidade média prevista naquele decil, e deve cair conforme o decil sobe.",
+                     "Decile 1 = the 10% of customers with the highest predicted default probability; decile 10 = the "
+                     "10% with the lowest. `p_medio` is the average predicted probability in that decile, and should "
+                     "fall as the decile number goes up."))
         st.dataframe(D["dec"].style.format({"taxa_evento": "{:.1%}", "p_medio": "{:.1%}", "lift": "{:.2f}", "ganho_acum": "{:.1%}"}),
                      width="stretch", hide_index=True)
 
@@ -324,27 +381,30 @@ with t2:
                              "(the money lent and not returned, collections, etc.). The higher this number, the "
                              "stricter the cutoff needs to be to offset the risk."))
     pc = profit_curve(D["scores"].y, D["scores"].p_xgb, ganho, perda)
-    pc_lr = profit_curve(D["scores"].y, D["scores"].p_lr, ganho, perda)
-    best, best_lr = pc.loc[pc.lucro.idxmax()], pc_lr.loc[pc_lr.lucro.idxmax()]
+    best = pc.loc[pc.lucro.idxmax()]
+    pcd = profit_by_decile(D["scores"].y, D["scores"].p_xgb, ganho, perda)
+    melhor_decil = int(pcd.loc[pcd.lucro.idxmax(), "decis_aprovados"])
     f = go.Figure()
-    f.add_scatter(x=pc.corte, y=pc.lucro, name="XGBoost", line_color=AZUL)
-    f.add_scatter(x=pc_lr.corte, y=pc_lr.lucro, name=L("Logística", "Logistic"), line_color=CINZA)
-    f.add_vline(x=best.corte, line_dash="dot", line_color=AZUL)
-    f.update_layout(height=340, margin=dict(t=10), xaxis_title=L("Aprovar quem tem prob. de inadimplência < corte",
-                                                                  "Approve whoever has default prob. < cutoff"),
-                    yaxis_title=L("Lucro esperado no teste (R$)", "Expected profit on test set ($)"), xaxis_tickformat=".0%")
+    cores_barras = [AZUL if n == melhor_decil else "#cfe0f7" for n in pcd.decis_aprovados]
+    f.add_bar(x=pcd.decis_aprovados, y=pcd.lucro, marker_color=cores_barras, name="XGBoost")
+    f.update_layout(height=340, margin=dict(t=10),
+                    xaxis=dict(title=L("Decis mais seguros aprovados (10 = todo mundo)",
+                                       "Safest deciles approved (10 = everyone)"), dtick=1),
+                    yaxis_title=L("Lucro esperado no teste (R$)", "Expected profit on test set ($)"))
     st.plotly_chart(f, width="stretch")
     st.caption(L(
-        "**Como ler este gráfico:** o eixo de baixo é o ponto de corte (aprovar todo mundo com probabilidade de "
-        "calote abaixo dele); o eixo da esquerda é o lucro esperado somando todos os clientes do teste com aquele "
-        "corte. A linha sobe enquanto aprovar mais gente ainda vale a pena, atinge um pico (o corte ótimo, linha "
-        "pontilhada) e depois desce, porque aprovar clientes cada vez mais arriscados passa a dar prejuízo.",
-        "**How to read this chart:** the bottom axis is the cutoff (approve everyone with default probability below "
-        "it); the left axis is the expected profit summed over all test customers at that cutoff. The line rises "
-        "while approving more people still pays off, peaks (the optimal cutoff, dotted line), then falls, because "
-        "approving increasingly risky customers starts to lose money.",
+        "**Como ler este gráfico:** em vez de cortar numa casa decimal de probabilidade, cortamos por **decil** "
+        "(faixa de risco), do jeito que uma política de crédito real costuma funcionar. Cada barra responde: "
+        "\"e se eu aprovar os N decis mais seguros?\" — a barra 10 aprova todo mundo (decil 1 incluso, o mais "
+        "arriscado); a barra 1 aprova só o decil mais seguro. A barra mais alta, em azul, é a que dá mais lucro "
+        "esperado com as hipóteses ao lado.",
+        "**How to read this chart:** instead of cutting at a decimal point of probability, we cut by **decile** "
+        "(risk band), the way a real credit policy usually works. Each bar answers: \"what if I approve the N "
+        "safest deciles?\" — bar 10 approves everyone (including decile 1, the riskiest); bar 1 approves only "
+        "the safest decile. The tallest bar, in blue, is the one that yields the highest expected profit under "
+        "the assumptions above.",
     ))
-    k = st.columns(4)
+    k = st.columns(3)
     k[0].metric(L("Corte ótimo (XGBoost)", "Optimal cutoff (XGBoost)"), f"{best.corte:.1%}",
                 help=L("O ponto de corte que gera o maior lucro esperado nos dados de teste, dadas as hipóteses de "
                        "margem e prejuízo ao lado. Veja a explicação completa logo abaixo.",
@@ -358,12 +418,6 @@ with t2:
                        "de propósito: um pouco de risco compensa, porque a margem de quem paga cobre o prejuízo.",
                        "Among customers approved by this cutoff, what share would actually default — it's not zero "
                        "on purpose: a bit of risk pays off, because the margin from those who pay covers the loss."))
-    k[3].metric(L("Lucro vs logística no corte ótimo", "Profit vs logistic at the optimal cutoff"),
-                f"$ {best.lucro - best_lr.lucro:,.0f}" if lang() == "en" else f"R$ {best.lucro - best_lr.lucro:,.0f}".replace(",", "."),
-                help=L("Quanto a mais (ou a menos) de lucro esperado o XGBoost entrega, no melhor corte de cada "
-                       "modelo, comparado com a regressão logística.",
-                       "How much more (or less) expected profit XGBoost delivers, at each model's own best cutoff, "
-                       "compared with logistic regression."))
     st.markdown(L(
         f"**O que esses números querem dizer:** o modelo dá uma probabilidade de inadimplência para cada cliente. "
         f"\"Corte ótimo de {best.corte:.1%}\" significa **aprovar todo mundo cuja probabilidade prevista de não pagar "
@@ -387,6 +441,18 @@ with t2:
 # ------------------------------------------------------------------ 3 explicação
 with t3:
     st.subheader(L("Por que o modelo decidiu isso?", "Why did the model decide this?"))
+    st.caption(L(
+        "**O que é log-odds, rapidinho:** o modelo não soma probabilidades diretamente (0% a 100% não se soma bem — "
+        "editar 10% + 10% não dá 20% de risco real). Ele soma tudo numa escala chamada **log-odds**, que vai de "
+        "−∞ a +∞ e soma normalmente; só no final essa soma é convertida em probabilidade. Não precisa fazer a conta: "
+        "o que importa é o **sinal** (vermelho empurra o risco para cima, azul para baixo) e o **tamanho da barra** "
+        "(quanto maior, mais aquela variável pesou na decisão).",
+        "**What log-odds means, quickly:** the model doesn't add up probabilities directly (0% to 100% doesn't add "
+        "cleanly — 10% + 10% isn't really 20% risk). It adds everything up on a scale called **log-odds**, which "
+        "runs from −∞ to +∞ and adds normally; only at the end is that sum converted into a probability. You don't "
+        "need to do the math: what matters is the **sign** (red pushes risk up, blue pushes it down) and the "
+        "**bar's size** (the bigger it is, the more that variable weighed on the decision).",
+    ))
     a, b = st.columns([2, 3])
     with a:
         st.markdown(L("**Importância global** (|SHAP| médio)", "**Global importance** (mean |SHAP|)"))
@@ -414,16 +480,19 @@ with t3:
         tb = tb.reindex(tb.shap.abs().sort_values(ascending=False).index).head(8).iloc[::-1]
         nd = "n/a" if lang() == "en" else "n/d"
         tb["rotulo"] = tb.apply(lambda r: f"{nome(r.variavel)} = {r.valor:g}" if pd.notna(r.valor) else f"{nome(r.variavel)} = {nd}", axis=1)
+        faixa_cli = faixa(pd.Series([probs[idx]])).astype(str)[0]
+        st.markdown(L(
+            f"**Cliente #{idx}** · probabilidade de inadimplência prevista: **{probs[idx]:.1%}** · faixa **{faixa_cli}** "
+            f"(média da base: {D['m']['taxa_evento']:.1%}).",
+            f"**Customer #{idx}** · predicted default probability: **{probs[idx]:.1%}** · band **{faixa_cli}** "
+            f"(base average: {D['m']['taxa_evento']:.1%}).",
+        ))
         f = go.Figure(go.Bar(x=tb.shap, y=tb.rotulo, orientation="h",
                              marker_color=[VERM if v > 0 else AZUL for v in tb.shap]))
         f.update_layout(height=380, margin=dict(t=10),
                         xaxis_title=L("Contribuição no log-odds (vermelho ↑ risco, azul ↓ risco)",
                                       "Contribution to log-odds (red ↑ risk, blue ↓ risk)"), yaxis_title="")
         st.plotly_chart(f, width="stretch")
-        st.markdown(L(f"Probabilidade de inadimplência prevista: **{probs[idx]:.1%}** "
-                    f"(média da base: {D['m']['taxa_evento']:.1%}).",
-                    f"Predicted default probability: **{probs[idx]:.1%}** "
-                    f"(base average: {D['m']['taxa_evento']:.1%})."))
     st.caption(L("O SHAP soma as contribuições em log-odds a partir do risco médio da base; a soma vira a probabilidade acima. "
                "Número no gráfico e número do texto são o mesmo. Não conhece o SHAP? Veja a aba **Conceitos** no menu.",
                "SHAP adds up log-odds contributions starting from the base's average risk; that sum becomes the "
@@ -511,6 +580,18 @@ with t4:
         f"The trained model was applied, with no retraining, to **{len(Xn):,} new customers** (Kaggle's test set), "
         "which **have no label**: just like a real credit pipeline, nobody knows yet who's going to default. "
         "The outcome only shows up 2 years from now, which is exactly why risk band, cutoff and monitoring matter.",
+    ))
+    st.caption(L(
+        "**Dois grupos aparecem daqui pra frente — não confundir:** a **fila nova** são os "
+        f"{len(Xn):,} clientes sem rótulo desta aba, pontuados agora mesmo, sem ninguém saber ainda quem vai "
+        "atrasar. O **teste rotulado** é a base de teste usada em todo o resto do app (aba Modelo, Decisão etc.), "
+        "onde já sabemos quem atrasou de verdade — é por isso que dá para calcular ali uma \"inadimplência real\" "
+        "e aqui, na fila nova, não.".replace(",", "."),
+        "**Two groups show up from here on — don't mix them up:** the **new queue** is this tab's "
+        f"{len(Xn):,} unlabeled customers, scored just now, with nobody yet knowing who will default. The "
+        "**labeled test set** is the test data used throughout the rest of the app (Model tab, Decision tab, "
+        "etc.), where we already know who actually defaulted — which is why a \"real default rate\" can be "
+        "computed there, and can't here, in the new queue.",
     ))
     fn = faixa(pn).astype(str)
     sc = D["scores"].copy()
@@ -672,6 +753,36 @@ with t5:
                 "porque ela só é observada 2 anos depois.",
                 f"Score status: **{nivel}**. In a real pipeline, this alert fires before the default even shows up, "
                 "because it's only observed 2 years later."))
+
+    st.divider()
+    c1m, c2m = st.columns(2)
+    with c1m:
+        st.markdown(L("**Distribuição do score: hoje × cenário simulado**", "**Score distribution: today × simulated scenario**"))
+        fh = go.Figure()
+        fh.add_histogram(x=p0, name=L("Hoje", "Today"), marker_color=CINZA, opacity=0.65, nbinsx=40, histnorm="probability")
+        fh.add_histogram(x=p1, name=L("Cenário simulado", "Simulated scenario"), marker_color=VERM, opacity=0.65, nbinsx=40, histnorm="probability")
+        fh.update_layout(height=300, margin=dict(t=10), barmode="overlay",
+                         xaxis_title=L("Probabilidade prevista", "Predicted probability"), yaxis_title=L("% da base", "% of data"))
+        st.plotly_chart(fh, width="stretch")
+        st.caption(L("O PSI resume esse desenho em um número; aqui dá para ver a forma da mudança — "
+                     "se o score inteiro deslocou, ou só a cauda de alto risco engordou.",
+                     "PSI summarizes this picture into one number; here you can see the shape of the change — "
+                     "whether the whole score shifted, or only the high-risk tail got fatter."))
+    with c2m:
+        st.markdown(L("**Migração de faixa: quem mudou de risco**", "**Band migration: who changed risk**"))
+        fx0, fx1 = faixa(pd.Series(p0)).astype(str), faixa(pd.Series(p1)).astype(str)
+        mig = pd.DataFrame({L("Faixa hoje", "Band today"): fx0.value_counts(normalize=True).reindex(list(FAIXA_DESC)),
+                            L("Faixa no cenário", "Band in scenario"): fx1.value_counts(normalize=True).reindex(list(FAIXA_DESC))})
+        fm = go.Figure()
+        fm.add_bar(x=mig.index, y=mig.iloc[:, 0], name=mig.columns[0], marker_color=CINZA)
+        fm.add_bar(x=mig.index, y=mig.iloc[:, 1], name=mig.columns[1], marker_color=VERM)
+        fm.update_layout(barmode="group", height=300, margin=dict(t=10), yaxis_tickformat=".0%",
+                         yaxis_title=L("% da base", "% of data"))
+        st.plotly_chart(fm, width="stretch")
+        st.caption(L("Se as faixas de maior risco (D, E) crescem no cenário simulado, é um sinal concreto de que a "
+                     "política de corte atual aprovaria gente mais arriscada do que o esperado, mesmo sem retreinar o modelo.",
+                     "If the riskier bands (D, E) grow under the simulated scenario, that's a concrete sign the "
+                     "current cutoff policy would approve riskier customers than expected, even without retraining the model."))
 
 # ------------------------------------------------------------------ 5 limites
 with t6:

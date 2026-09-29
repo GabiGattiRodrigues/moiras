@@ -18,6 +18,7 @@
     "Testei validação fora do tempo (treino nos 80% mais antigos, teste nos 20% mais recentes): o desempenho despenca e varia de 0,45 a 0,75 de AUC entre os modelos, porque a taxa de conversão vai de 6% para 31% e os juros saem da faixa do treino. O split aleatório superestima o desempenho que se teria numa campanha futura.",
     "Base de 2008–2010 em Portugal: não representa a realidade atual nem brasileira."
   ],
+  "logistica_intercepto": -2.379100066228905,
   "arvore_dt": {
     "profundidade": 6,
     "folhas": 16,
@@ -30,10 +31,11 @@
   },
   "rf_n_arvores": 300,
   "rf_top_auc": 0.752539034860135,
+  "shap_base": -2.4284968181528064,
   "n_treino": 32950,
   "n_teste": 8238,
   "taxa_treino": 0.11265553869499241,
   "taxa_teste": 0.11264870114105366,
-  "escolhido": "XGBoost",
-  "melhor_cv": "XGBoost"
+  "escolhido": "LightGBM",
+  "melhor_cv": "LightGBM"
 }

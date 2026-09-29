@@ -1,7 +1,7 @@
 """Disputa entre famílias de modelo com a mesma régua, decidida por uma regra declarada ANTES de rodar.
 
 Regra (1 erro-padrão): olha-se a AUC de validação cruzada (só no treino). Entre os modelos cuja AUC está a
-menos de 1 erro-padrão do melhor, vence o MAIS SIMPLES (logística < árvore < random forest < XGBoost).
+menos de 1 erro-padrão do melhor, vence o MAIS SIMPLES (logística < árvore < random forest < XGBoost/LightGBM/CatBoost).
 O teste final (outra base / outro período) só confirma; não participa da escolha.
 """
 from __future__ import annotations
@@ -13,6 +13,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from catboost import CatBoostClassifier
+from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -26,8 +28,13 @@ from xgboost import XGBClassifier
 from moiras.metrics import summary
 
 SEED = 42
-COMPLEXIDADE = {"Regressão logística": 1, "Árvore de decisão": 2, "Random forest": 3, "XGBoost": 4}
-SLUG = {"Regressão logística": "logistica", "Árvore de decisão": "arvore", "Random forest": "rf", "XGBoost": "xgb"}
+# Complexidade usada na regra de desempate (1 EP): entre os empatados, vence o de MENOR número aqui.
+# XGBoost/LightGBM/CatBoost ficam no mesmo patamar (4) por serem essencialmente tão complexos quanto o outro —
+# nenhum "vence por simplicidade" sobre os outros dois; entre eles, o desempate vai para a melhor AUC de validação.
+COMPLEXIDADE = {"Regressão logística": 1, "Árvore de decisão": 2, "Random forest": 3,
+                "XGBoost": 4, "LightGBM": 4, "CatBoost": 4}
+SLUG = {"Regressão logística": "logistica", "Árvore de decisão": "arvore", "Random forest": "rf",
+        "XGBoost": "xgb", "LightGBM": "lgbm", "CatBoost": "catboost"}
 
 
 def modelos(n_treino: int, grade: str = "normal") -> dict:
@@ -54,6 +61,16 @@ def modelos(n_treino: int, grade: str = "normal") -> dict:
             {"max_depth": [2, 3, 4], "learning_rate": [0.05], "n_estimators": [150, 400],
              "min_child_weight": [5, 20]} if not leve else
             {"max_depth": [3, 4], "learning_rate": [0.05], "n_estimators": [300], "min_child_weight": [20]}),
+        "LightGBM": (
+            LGBMClassifier(random_state=SEED, n_jobs=-1, subsample=0.8, colsample_bytree=0.8, verbosity=-1),
+            {"max_depth": [3, 4, 5], "learning_rate": [0.05], "n_estimators": [150, 400],
+             "min_child_samples": [10, 30]} if not leve else
+            {"max_depth": [3, 4], "learning_rate": [0.05], "n_estimators": [300], "min_child_samples": [30]}),
+        "CatBoost": (
+            CatBoostClassifier(random_state=SEED, verbose=False, subsample=0.8, rsm=0.8),
+            {"depth": [3, 4, 5], "learning_rate": [0.05], "iterations": [150, 400],
+             "min_data_in_leaf": [10, 30]} if not leve else
+            {"depth": [3, 4], "learning_rate": [0.05], "iterations": [300], "min_data_in_leaf": [30]}),
     }
 
 
@@ -67,10 +84,14 @@ class Resultado:
 
 
 def escolher(tab: pd.DataFrame) -> tuple[str, str]:
-    """Regra de 1 erro-padrão. Devolve (escolhido, melhor por AUC)."""
+    """Regra de 1 erro-padrão. Devolve (escolhido, melhor por AUC).
+
+    Entre os empatados (dentro de 1 EP do melhor), vence o de menor complexidade; entre modelos de MESMA
+    complexidade (ex.: XGBoost x LightGBM x CatBoost), o desempate vai para a maior AUC de validação.
+    """
     top = tab.loc[tab.cv_auc.idxmax()]
     limite = top.cv_auc - top.cv_ep
-    ok = tab[tab.cv_auc >= limite].sort_values("complexidade")
+    ok = tab[tab.cv_auc >= limite].sort_values(["complexidade", "cv_auc"], ascending=[True, False])
     return ok.iloc[0].modelo, top.modelo
 
 
@@ -85,7 +106,8 @@ def disputar(Xtr, ytr, Xte, yte, cv, grade: str = "normal", log=print) -> Result
     n_indep = getattr(cv, "n_splits", n_splits)
     for nome, (est, g) in modelos(len(Xtr), grade).items():
         t0 = time.time()
-        gs = GridSearchCV(est, g, scoring="roc_auc", cv=cv, n_jobs=1 if nome in ("Random forest", "XGBoost") else -1,
+        gs = GridSearchCV(est, g, scoring="roc_auc", cv=cv,
+                          n_jobs=1 if nome in ("Random forest", "XGBoost", "LightGBM", "CatBoost") else -1,
                           refit=True)
         gs.fit(Xtr, ytr)
         i = gs.best_index_

@@ -20,6 +20,27 @@ from sklearn.model_selection import (RepeatedStratifiedKFold, TimeSeriesSplit,
 from moiras.compare import SEED, SLUG, disputar, exportar_dt_real, exportar_rf_arvores
 from moiras.metrics import calibration_table, decile_table, psi, summary
 
+BOOSTING = ("XGBoost", "LightGBM", "CatBoost")
+
+
+def exportar_shap(modelo_ajustado, Xte: pd.DataFrame, out: Path) -> float:
+    """SHAP para as famílias de boosting (sem pipeline de imputação por trás) — genérico, mesmo código para
+    XGBoost, LightGBM e CatBoost. Contribuição de cada variável, por caso do teste, em log-odds.
+
+    Devolve o valor-base (log-odds médio da base) para o simulador "um caso por vez" reconstituir a probabilidade.
+    """
+    import shap
+    explainer = shap.TreeExplainer(modelo_ajustado)
+    sv = explainer(Xte)
+    base = np.ravel(sv.base_values)
+    base = float(base[0]) if base.size else float(sv.base_values)
+    contrib = pd.DataFrame(sv.values, columns=Xte.columns, index=Xte.index)
+    contrib.to_csv(out / "shap_valores.csv")
+    Xte.to_csv(out / "shap_features.csv")
+    (pd.DataFrame({"variavel": Xte.columns, "shap_medio_abs": np.abs(contrib).mean(axis=0).values})
+     .sort_values("shap_medio_abs", ascending=False).to_csv(out / "shap_importancia.csv", index=False))
+    return base
+
 # ----------------------------------------------------------------------------- turnover
 HR_PT = {
     "Age": "Idade", "BusinessTravel": "Viagens a trabalho", "DailyRate": "Diária", "Department": "Departamento",
@@ -122,8 +143,17 @@ def salvar(res, Xtr, ytr, Xte, yte, meta, out: Path) -> None:
     # coeficientes da logística (por desvio-padrão), sempre úteis para comparar
     lr = res.ajustados["Regressão logística"]
     coef = lr[-1].coef_[0]
+    intercepto = float(lr[-1].intercept_[0])
     (pd.DataFrame({"variavel": Xte.columns, "coef_por_dp": coef, "odds_ratio": np.exp(coef)})
      .sort_values("coef_por_dp", key=np.abs, ascending=False).to_csv(out / "logistica_coef.csv", index=False))
+
+    # contribuição de cada variável (em log-odds) para cada cliente do teste, para o simulador "um por vez"
+    imputer, scaler = lr[0], lr[1]
+    Xte_pad = pd.DataFrame(scaler.transform(imputer.transform(Xte)), columns=Xte.columns, index=Xte.index)
+    contrib = Xte_pad * coef
+    contrib.to_csv(out / "logistica_contrib.csv")
+    Xte.to_csv(out / "logistica_valores.csv")
+    meta["logistica_intercepto"] = intercepto
 
     # a árvore de decisão REAL que competiu (não uma versão simplificada à parte)
     dt_info = exportar_dt_real(res.ajustados["Árvore de decisão"], Xtr.columns, out)
@@ -134,6 +164,10 @@ def salvar(res, Xtr, ytr, Xte, yte, meta, out: Path) -> None:
     rf_ranking = exportar_rf_arvores(res.ajustados["Random forest"], Xte, yte, Xte.columns, out)
     meta["rf_n_arvores"] = int(len(rf_ranking))
     meta["rf_top_auc"] = float(rf_ranking.auc_individual.max())
+
+    # SHAP do vencedor, só para as famílias de boosting (mesma lógica do case 1, genérica via TreeExplainer)
+    if esc in BOOSTING:
+        meta["shap_base"] = exportar_shap(res.ajustados[esc], Xte, out)
 
     # PSI treino x teste por variável e pelo score do modelo escolhido
     ptr = res.ajustados[esc].predict_proba(Xtr)[:, 1]
