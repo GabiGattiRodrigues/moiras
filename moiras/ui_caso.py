@@ -11,6 +11,7 @@ import streamlit as st
 
 from moiras.compare import SLUG
 from moiras.lang import L, lang
+from moiras.metrics import profit_by_decile_acao
 
 ROOT = Path(__file__).resolve().parent.parent
 AZUL, AZUL_ESC, CINZA, VERM, VERDE = "#1f5fbf", "#0b2a5b", "#9aa5b1", "#d1495b", "#2a9d6f"
@@ -277,74 +278,61 @@ def render(caso: str) -> None:
                                     "desconto oferecido, ligação feita, etc.",
                                     "How much it costs to reach out to a person, whether or not it works — team "
                                     "time, discount offered, the call made, etc."))
-        y = sc["y"].to_numpy()
-        p = sc[esc].to_numpy()
-        ordem = np.argsort(-p)
-        ganho = np.cumsum(y[ordem] * v * s - cu)
-        frac = np.arange(1, len(y) + 1) / len(y)
-        aleatorio = frac * len(y) * (y.mean() * v * s - cu)
-        kbest = int(np.argmax(ganho))
+        pda = profit_by_decile_acao(sc["y"], sc[esc], v, s, cu)
+        best_acao = pda.loc[pda.lucro.idxmax()]
+        melhor_decil_acao = int(best_acao.decis_abordados)
         f = go.Figure()
-        f.add_scatter(x=frac, y=ganho, name=L(f"Priorizando pelo {esc}", f"Prioritizing by {mnome(esc)}"), line_color=AZUL)
-        f.add_scatter(x=frac, y=aleatorio, name=L("Abordando ao acaso", "Reaching out at random"), line=dict(color=CINZA, dash="dot"))
-        f.add_vline(x=frac[kbest], line_dash="dot", line_color=AZUL)
+        cores_barras = [AZUL if n == melhor_decil_acao else "#cfe0f7" for n in pda.decis_abordados]
+        f.add_bar(x=pda.decis_abordados, y=pda.lucro, marker_color=cores_barras, name=mnome(esc))
         f.update_layout(height=340, margin=dict(t=10),
-                        xaxis_title=L(f"% dos {unidade}s abordados (do maior para o menor risco)",
-                                      f"% of {unidade}s reached (highest to lowest risk)"),
-                        yaxis_title=L("Resultado esperado no teste (R$)", "Expected result on test set ($)"),
-                        xaxis_tickformat=".0%", legend=dict(orientation="h", y=1.12))
+                        xaxis=dict(title=L("Decis de maior risco abordados (10 = todo mundo)",
+                                           "Highest-risk deciles reached (10 = everyone)"), dtick=1),
+                        yaxis_title=L("Resultado esperado no teste (R$)", "Expected result on test set ($)"))
         st.plotly_chart(f, width="stretch")
         st.caption(L(
-            "**Como ler este gráfico:** o eixo de baixo é a % de pessoas abordadas, começando pela de maior risco/"
-            "propensão segundo o modelo; o eixo da esquerda é o resultado acumulado esperado. A linha azul sobe "
-            "enquanto abordar mais gente ainda compensa, atinge um pico (o ponto ótimo, linha pontilhada) e desce "
-            "depois — abordar quem sobra já não vale o custo. A linha cinza pontilhada mostra o que aconteceria "
-            "abordando pessoas ao acaso, para comparação.",
-            "**How to read this chart:** the bottom axis is the % of people reached, starting with the highest "
-            "risk/propensity per the model; the left axis is the expected cumulative result. The blue line rises "
-            "while reaching out to more people still pays off, peaks (the optimal point, dotted line), then falls "
-            "— reaching the rest isn't worth the cost anymore. The dotted gray line shows what would happen "
-            "reaching out at random, for comparison.",
+            "**Como ler este gráfico:** em vez de abordar uma fração contínua da fila, cortamos por **decil** "
+            "de risco, do jeito que uma política real costuma funcionar. Cada barra responde: \"e se eu abordar "
+            "os N decis de maior risco?\" — a barra 10 aborda todo mundo (decil 10 incluso, o menos arriscado); "
+            "a barra 1 aborda só o decil mais arriscado. A barra mais alta, em azul, é a que dá mais resultado "
+            "esperado com as hipóteses ao lado.",
+            "**How to read this chart:** instead of reaching a continuous fraction of the queue, we cut by risk "
+            "**decile**, the way a real policy usually works. Each bar answers: \"what if I reach out to the N "
+            "highest-risk deciles?\" — bar 10 reaches everyone (including decile 10, the safest); bar 1 reaches "
+            "only the riskiest decile. The tallest bar, in blue, is the one that yields the highest expected "
+            "result under the assumptions above.",
         ))
-        kk = st.columns(4)
-        kk[0].metric(L("Abordar até", "Reach out up to"), f"{frac[kbest]:.0%}",
-                     help=L("Fração da lista, ordenada do maior para o menor risco pelo modelo, que maximiza o "
-                            "resultado esperado com as hipóteses ao lado.",
-                            "Share of the list, ranked from highest to lowest risk by the model, that maximizes the "
-                            "expected result under the assumptions above."))
-        kk[1].metric(L("Capturaria dos eventos", "Would capture of events"), f"{y[ordem][:kbest + 1].sum() / y.sum():.0%}",
+        kk = st.columns(3)
+        kk[0].metric(L("Abordar até", "Reach out up to"), L(f"Decil {melhor_decil_acao}", f"Decile {melhor_decil_acao}"),
+                     help=L(f"A faixa que maximiza o resultado esperado com as hipóteses ao lado — equivale a "
+                            f"abordar {best_acao.fracao:.0%} da fila.",
+                            f"The band that maximizes the expected result under the assumptions above — equivalent "
+                            f"to reaching {best_acao.fracao:.0%} of the queue."))
+        kk[1].metric(L("Capturaria dos eventos", "Would capture of events"), f"{best_acao.captura_eventos:.0%}",
                      help=L("Dos casos que realmente aconteceriam, que fração estaria dentro dessa fatia priorizada "
                             "pelo modelo.",
                             "Of the cases that would actually happen, what share would fall inside this slice "
                             "prioritized by the model."))
         kk[2].metric(L("Resultado (teste)", "Result (test)"),
-                     (f"$ {ganho[kbest]:,.0f}" if lang() == "en" else f"R$ {ganho[kbest]:,.0f}".replace(",", ".")),
-                     help=L("Resultado esperado acumulado até esse ponto de corte, nos dados de teste.",
-                            "Expected cumulative result up to this cutoff, on the test data."))
-        kk[3].metric(L("Ao acaso, mesmo alcance", "At random, same reach"),
-                     (f"$ {aleatorio[kbest]:,.0f}" if lang() == "en" else f"R$ {aleatorio[kbest]:,.0f}".replace(",", ".")),
-                     help=L("Resultado esperado se, em vez de usar o modelo, você abordasse a mesma quantidade de "
-                            "pessoas escolhidas ao acaso.",
-                            "Expected result if, instead of using the model, you reached out to the same number of "
-                            "randomly chosen people."))
+                     (f"$ {best_acao.lucro:,.0f}" if lang() == "en" else f"R$ {best_acao.lucro:,.0f}".replace(",", ".")),
+                     help=L("Resultado esperado acumulado até esse decil, nos dados de teste.",
+                            "Expected cumulative result up to this decile, on the test data."))
         st.markdown(L(
-            f"**O que esses números querem dizer:** o modelo ordena os {unidade}s do mais para o menos arriscado/propenso. "
-            f"\"Abordar até {frac[kbest]:.0%}\" significa: comece pelo topo dessa lista e pare quando chegar em "
-            f"{frac[kbest]:.0%} do total — passar disso, o próximo da lista já não compensa mais (custa mais do que "
-            "o resultado esperado dele). Fazendo isso, você pegaria "
-            f"**{y[ordem][:kbest + 1].sum() / y.sum():.0%} de todos os casos de {evento}** abordando só "
-            f"{frac[kbest]:.0%} das pessoas — bem menos trabalho do que abordar todo mundo, e bem melhor do que abordar "
-            "ao acaso (linha pontilhada no gráfico). Ranquear é o que o modelo entrega; decidir **onde parar** depende de "
-            "quanto vale acertar e quanto custa abordar — mexa nos valores acima e veja o ponto ótimo andar.",
-            f"**What these numbers mean:** the model ranks the {unidade}s from most to least risky/likely. \"Reach "
-            f"out up to {frac[kbest]:.0%}\" means: start from the top of that list and stop once you hit "
-            f"{frac[kbest]:.0%} of the total — past that point, the next person on the list no longer pays off "
-            "(costs more than their expected result). Doing this, you'd capture "
-            f"**{y[ordem][:kbest + 1].sum() / y.sum():.0%} of all {evento} cases** while reaching out to only "
-            f"{frac[kbest]:.0%} of the people — far less work than reaching everyone, and much better than random "
-            "outreach (dotted line on the chart). Ranking is what the model delivers; deciding **where to stop** "
-            "depends on how much a hit is worth and how much reaching out costs — move the values above and watch "
-            "the optimal point shift.",
+            f"**O que esses números querem dizer:** o modelo ordena os {unidade}s do mais para o menos arriscado/propenso "
+            f"em decis (decil 1 = mais arriscado/propenso, decil 10 = menos). \"Abordar até o decil {melhor_decil_acao}\" "
+            f"significa: comece pelo decil 1 e aborde até o decil {melhor_decil_acao} — passar disso, o próximo decil já "
+            f"não compensa mais (custa mais do que o resultado esperado dele). Fazendo isso, você pegaria "
+            f"**{best_acao.captura_eventos:.0%} de todos os casos de {evento}** abordando só {best_acao.fracao:.0%} das "
+            "pessoas — bem menos trabalho do que abordar todo mundo. Ranquear é o que o modelo entrega; decidir "
+            "**onde parar** depende de quanto vale acertar e quanto custa abordar — mexa nos valores acima e veja "
+            "o decil ótimo andar.",
+            f"**What these numbers mean:** the model ranks the {unidade}s from most to least risky/likely into "
+            f"deciles (decile 1 = riskiest/most likely, decile 10 = least). \"Reach out up to decile "
+            f"{melhor_decil_acao}\" means: start at decile 1 and reach out through decile {melhor_decil_acao} — "
+            "past that point, the next decile no longer pays off (costs more than its expected result). Doing "
+            f"this, you'd capture **{best_acao.captura_eventos:.0%} of all {evento} cases** while reaching out to "
+            f"only {best_acao.fracao:.0%} of the people — far less work than reaching everyone. Ranking is what "
+            "the model delivers; deciding **where to stop** depends on how much a hit is worth and how much "
+            "reaching out costs — move the values above and watch the optimal decile shift.",
         ))
 
     # ------------------------------------------------------------ explicação

@@ -54,14 +54,19 @@ def prepare(df: pd.DataFrame, caps: dict) -> pd.DataFrame:
     return d
 
 
-FAIXAS = [(0.02, "A"), (0.05, "B"), (0.10, "C"), (0.25, "D"), (1.01, "E")]
-FAIXA_DESC = {"A": "< 2%", "B": "2% a 5%", "C": "5% a 10%", "D": "10% a 25%", "E": "> 25%"}
+def decil_edges(p_ref, n: int = 10) -> np.ndarray:
+    """Fronteiras dos decis de risco a partir de uma distribuição de referência (o teste rotulado): calculadas
+    UMA vez e reaplicadas em qualquer contexto (fila nova, um cliente, cenário simulado) — mesma régua sempre,
+    é o que torna "decil 3" comparável entre uma tabela e outra."""
+    qs = np.quantile(np.asarray(p_ref), np.linspace(0, 1, n + 1))
+    qs[0], qs[-1] = -np.inf, np.inf
+    return qs
 
 
-def faixa(p: pd.Series) -> pd.Series:
-    """Faixa de risco (rating) pela probabilidade de inadimplência prevista."""
-    edges = [0] + [c for c, _ in FAIXAS]
-    return pd.cut(p, edges, labels=[f for _, f in FAIXAS], right=False)
+def decil(p, edges) -> pd.Series:
+    """Decil de risco (1 = maior probabilidade prevista, 10 = menor), pelas fronteiras fixas de `decil_edges`."""
+    labels = list(range(len(edges) - 1, 0, -1))
+    return pd.cut(pd.Series(p), edges, labels=labels, include_lowest=True).astype(int)
 
 
 def log_features(X: pd.DataFrame) -> pd.DataFrame:

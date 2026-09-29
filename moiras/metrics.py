@@ -110,3 +110,28 @@ def profit_by_decile(y, p, gain_bom: float, perda_mau: float) -> pd.DataFrame:
                      "inadimplencia_aprovados": maus / max(k, 1),
                      "lucro": bons * gain_bom - maus * perda_mau})
     return pd.DataFrame(rows)
+
+
+def profit_by_decile_acao(y, p, valor: float, sucesso: float, custo: float) -> pd.DataFrame:
+    """Resultado esperado abordando os N decis de MAIOR risco/propensão, em vez de fração contínua da fila.
+
+    Decil 1 = 10% mais arriscado/propenso (mesma convenção de decile_table e profit_by_decile). Cada linha ``n``
+    responde: "e se eu abordar os n decis de maior risco (1, 2, ..., n)?" — como uma política real costuma
+    priorizar, por faixa, não por casa decimal de probabilidade.
+    """
+    y, p = np.asarray(y), np.asarray(p)
+    ordem = np.argsort(-p)  # do maior risco/propensão para o menor
+    yo = y[ordem]
+    n_total = len(p)
+    rows = []
+    for n in range(1, 11):
+        k = int(round(n_total * n / 10))
+        k = max(k, 1)
+        abord_y = yo[:k]
+        # corte = menor probabilidade ainda abordada (fronteira do decil abordado)
+        corte = float(p[ordem][:k].min()) if k > 0 else 0.0
+        eventos = int((abord_y == 1).sum())
+        rows.append({"decis_abordados": n, "corte": corte, "fracao": k / n_total,
+                     "captura_eventos": eventos / max(int((y == 1).sum()), 1),
+                     "lucro": eventos * valor * sucesso - k * custo})
+    return pd.DataFrame(rows)

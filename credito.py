@@ -9,9 +9,9 @@ import streamlit as st
 import xgboost as xgb
 
 from moiras.compare import SLUG
-from moiras.credito import ENTRADAS, FAIXA_DESC, RENAME, faixa, padronizar, prepare
+from moiras.credito import ENTRADAS, RENAME, decil, decil_edges, padronizar, prepare
 from moiras.lang import L, lang
-from moiras.metrics import profit_by_decile, profit_curve, psi
+from moiras.metrics import profit_by_decile, psi
 
 COR4 = {"Regressão logística": "#1f5fbf", "Árvore de decisão": "#e0a030", "Random forest": "#2a9d6f",
         "XGBoost": "#d1495b", "LightGBM": "#8a5fd1", "CatBoost": "#c77b2e"}
@@ -136,11 +136,14 @@ def pontuar(raw: pd.DataFrame) -> pd.DataFrame:
     X = prepare(padronizar(raw), caps())
     cols = carregar_modelo().get_booster().feature_names
     p = carregar_modelo().predict_proba(X[cols])[:, 1]
-    return pd.DataFrame({"prob_inadimplencia": p, "faixa": faixa(pd.Series(p, index=X.index)).astype(str)}, index=X.index)
+    return pd.DataFrame({"prob_inadimplencia": p, "decil": decil(pd.Series(p, index=X.index), EDGES)}, index=X.index)
 
 
 D = carregar()
 M = D["m"]
+# Fronteiras dos decis de risco, calculadas UMA vez a partir do teste rotulado e reaplicadas em qualquer
+# contexto (fila nova, um cliente, cenário simulado) — assim "decil 3" significa a mesma coisa em toda a página.
+EDGES = decil_edges(D["scores"].p_xgb)
 
 # ------------------------------------------------------------------ capa
 st.title(L("Case 1 · Risco de crédito", "Case 1 · Credit risk"))
@@ -380,10 +383,9 @@ with t2:
                              "How much the company loses, on average, when it approves a customer who doesn't pay "
                              "(the money lent and not returned, collections, etc.). The higher this number, the "
                              "stricter the cutoff needs to be to offset the risk."))
-    pc = profit_curve(D["scores"].y, D["scores"].p_xgb, ganho, perda)
-    best = pc.loc[pc.lucro.idxmax()]
     pcd = profit_by_decile(D["scores"].y, D["scores"].p_xgb, ganho, perda)
-    melhor_decil = int(pcd.loc[pcd.lucro.idxmax(), "decis_aprovados"])
+    best = pcd.loc[pcd.lucro.idxmax()]
+    melhor_decil = int(best.decis_aprovados)
     f = go.Figure()
     cores_barras = [AZUL if n == melhor_decil else "#cfe0f7" for n in pcd.decis_aprovados]
     f.add_bar(x=pcd.decis_aprovados, y=pcd.lucro, marker_color=cores_barras, name="XGBoost")
@@ -405,11 +407,14 @@ with t2:
         "the assumptions above.",
     ))
     k = st.columns(3)
-    k[0].metric(L("Corte ótimo (XGBoost)", "Optimal cutoff (XGBoost)"), f"{best.corte:.1%}",
-                help=L("O ponto de corte que gera o maior lucro esperado nos dados de teste, dadas as hipóteses de "
-                       "margem e prejuízo ao lado. Veja a explicação completa logo abaixo.",
-                       "The cutoff that generates the highest expected profit on the test data, given the margin "
-                       "and loss assumptions above. See the full explanation right below."))
+    k[0].metric(L("Corte ótimo (XGBoost)", "Optimal cutoff (XGBoost)"),
+                L(f"Até o decil {melhor_decil}", f"Up to decile {melhor_decil}"),
+                help=L(f"A faixa que gera o maior lucro esperado nos dados de teste, dadas as hipóteses de margem "
+                       f"e prejuízo ao lado — equivale a uma probabilidade prevista de calote de até {best.corte:.1%}. "
+                       "Veja a explicação completa logo abaixo.",
+                       f"The band that generates the highest expected profit on the test data, given the margin "
+                       f"and loss assumptions above — equivalent to a predicted default probability up to {best.corte:.1%}. "
+                       "See the full explanation right below."))
     k[1].metric(L("Aprovação", "Approval rate"), f"{best.aprovacao:.0%}",
                 help=L("Que fração de todos os clientes do teste seria aprovada usando esse corte ótimo.",
                        "What share of all test customers would be approved using this optimal cutoff."))
@@ -419,20 +424,24 @@ with t2:
                        "Among customers approved by this cutoff, what share would actually default — it's not zero "
                        "on purpose: a bit of risk pays off, because the margin from those who pay covers the loss."))
     st.markdown(L(
-        f"**O que esses números querem dizer:** o modelo dá uma probabilidade de inadimplência para cada cliente. "
-        f"\"Corte ótimo de {best.corte:.1%}\" significa **aprovar todo mundo cuja probabilidade prevista de não pagar "
-        f"seja menor que {best.corte:.1%}, e recusar o resto**. Com as hipóteses acima, isso aprova {best.aprovacao:.0%} "
+        f"**O que esses números querem dizer:** o modelo dá uma probabilidade de inadimplência para cada cliente, "
+        f"e cada cliente cai num decil de risco (decil 1 = mais arriscado, decil 10 = mais seguro). "
+        f"\"Corte ótimo no decil {melhor_decil}\" significa **aprovar todo mundo até esse decil (os mais seguros), "
+        f"e recusar o resto** — na prática, uma probabilidade prevista de calote de até {best.corte:.1%}. "
+        f"Com as hipóteses acima, isso aprova {best.aprovacao:.0%} "
         f"da fila (os mais seguros) e recusa os outros {1 - best.aprovacao:.0%} (os mais arriscados); entre os aprovados, "
         f"{best.inadimplencia_aprovados:.1%} ainda vão dar calote — um risco que compensa, porque a margem dos que pagam "
-        "cobre esse prejuízo. Passar desse ponto e aprovar mais gente já dá prejuízo, porque a probabilidade de dar calote "
+        "cobre esse prejuízo. Passar desse decil e aprovar mais gente já dá prejuízo, porque a probabilidade de dar calote "
         "vezes o valor do prejuízo passa a valer mais do que a margem que se ganha. Com essas hipóteses, isso acontece perto "
         f"de **{ganho / (ganho + perda):.1%}** de probabilidade — mexa nos sliders acima e veja o corte andar.",
-        f"**What these numbers mean:** the model gives each customer a default probability. \"Optimal cutoff of "
-        f"{best.corte:.1%}\" means **approve everyone whose predicted probability of not paying is below "
-        f"{best.corte:.1%}, and reject the rest**. With the assumptions above, this approves {best.aprovacao:.0%} of "
+        f"**What these numbers mean:** the model gives each customer a default probability, and each customer "
+        f"falls into a risk decile (decile 1 = riskiest, decile 10 = safest). \"Optimal cutoff at decile "
+        f"{melhor_decil}\" means **approve everyone up to that decile (the safest ones), and reject the rest** — "
+        f"in practice, a predicted default probability up to {best.corte:.1%}. With the assumptions above, this "
+        f"approves {best.aprovacao:.0%} of "
         f"the queue (the safest ones) and rejects the other {1 - best.aprovacao:.0%} (the riskiest); among the "
         f"approved, {best.inadimplencia_aprovados:.1%} will still default — a risk that pays off, because the "
-        "margin from those who pay covers that loss. Go past this point and approve more people, and it already "
+        "margin from those who pay covers that loss. Go past this decile and approve more people, and it already "
         "loses money, because the default probability times the loss amount outweighs the margin earned. With "
         f"these assumptions, that happens near **{ganho / (ganho + perda):.1%}** probability — move the sliders "
         "above and watch the cutoff shift.",
@@ -480,11 +489,11 @@ with t3:
         tb = tb.reindex(tb.shap.abs().sort_values(ascending=False).index).head(8).iloc[::-1]
         nd = "n/a" if lang() == "en" else "n/d"
         tb["rotulo"] = tb.apply(lambda r: f"{nome(r.variavel)} = {r.valor:g}" if pd.notna(r.valor) else f"{nome(r.variavel)} = {nd}", axis=1)
-        faixa_cli = faixa(pd.Series([probs[idx]])).astype(str)[0]
+        decil_cli = int(decil(pd.Series([probs[idx]]), EDGES).iloc[0])
         st.markdown(L(
-            f"**Cliente #{idx}** · probabilidade de inadimplência prevista: **{probs[idx]:.1%}** · faixa **{faixa_cli}** "
+            f"**Cliente #{idx}** · probabilidade de inadimplência prevista: **{probs[idx]:.1%}** · decil **{decil_cli}** "
             f"(média da base: {D['m']['taxa_evento']:.1%}).",
-            f"**Customer #{idx}** · predicted default probability: **{probs[idx]:.1%}** · band **{faixa_cli}** "
+            f"**Customer #{idx}** · predicted default probability: **{probs[idx]:.1%}** · decile **{decil_cli}** "
             f"(base average: {D['m']['taxa_evento']:.1%}).",
         ))
         f = go.Figure(go.Bar(x=tb.shap, y=tb.rotulo, orientation="h",
@@ -593,18 +602,24 @@ with t4:
         "etc.), where we already know who actually defaulted — which is why a \"real default rate\" can be "
         "computed there, and can't here, in the new queue.",
     ))
-    fn = faixa(pn).astype(str)
+    fn = decil(pn, EDGES)
     sc = D["scores"].copy()
-    sc["faixa"] = faixa(sc.p_xgb).astype(str)
-    col1n = L("Prob. prevista", "Predicted prob.")
-    tb = pd.DataFrame({col1n: FAIXA_DESC})
+    sc["decil"] = decil(sc.p_xgb, EDGES)
+    col1n = L("Faixa de probabilidade", "Probability range")
+    desc_decil = {}
+    for d in range(1, 11):
+        lo, hi = EDGES[10 - d], EDGES[11 - d]
+        lo_s = "0%" if not np.isfinite(lo) else f"{lo:.1%}"
+        hi_s = L("e mais", "and up") if not np.isfinite(hi) else f"{hi:.1%}"
+        desc_decil[d] = f"{lo_s} – {hi_s}"
+    tb = pd.DataFrame({col1n: pd.Series(desc_decil)})
     col2n, col3n, col4n = (L("% da fila nova", "% of new queue"), L("% da base de teste", "% of test set"),
                             L("Inadimplência real (teste rotulado)", "Real default rate (labeled test set)"))
     tb[col2n] = fn.value_counts(normalize=True)
-    tb[col3n] = sc.faixa.value_counts(normalize=True)
-    tb[col4n] = sc.groupby("faixa").y.mean()
-    tb = tb.loc[list(FAIXA_DESC)]
-    tb.index.name = L("Faixa", "Band")
+    tb[col3n] = sc.decil.value_counts(normalize=True)
+    tb[col4n] = sc.groupby("decil").y.mean()
+    tb = tb.reindex(range(1, 11))
+    tb.index.name = L("Decil", "Decile")
     a, b = st.columns([3, 2])
     with a:
         st.dataframe(tb.style.format({c: "{:.1%}" for c in tb.columns[1:]}), width="stretch")
@@ -613,13 +628,14 @@ with t4:
         f.add_bar(x=tb.index, y=tb[col2n], name=L("Fila nova", "New queue"), marker_color=AZUL)
         f.add_bar(x=tb.index, y=tb[col3n], name=L("Teste rotulado", "Labeled test set"), marker_color=CINZA)
         f.update_layout(barmode="group", height=250, margin=dict(t=10, b=10), yaxis_tickformat=".0%",
+                        xaxis=dict(title=L("Decil (1 = mais arriscado)", "Decile (1 = riskiest)"), dtick=1),
                         yaxis_title=L("% dos clientes", "% of customers"))
         st.plotly_chart(f, width="stretch")
-    st.caption(L("A distribuição da fila nova por faixa é praticamente a do teste, então o modelo está sendo aplicado a uma população parecida "
-               "com a do treino. A coluna de inadimplência real mostra que cada faixa significa o que promete: A perto de 1%, E acima de 40%.",
-               "The new queue's distribution by band is practically the same as the test set's, so the model is being applied to a "
-               "population similar to the one it trained on. The real-default-rate column shows each band means what it promises: "
-               "A near 1%, E above 40%."))
+    st.caption(L("A distribuição da fila nova por decil é praticamente a do teste, então o modelo está sendo aplicado a uma população parecida "
+               "com a do treino. A coluna de inadimplência real mostra que cada decil significa o que promete: decil 10 perto de 0%, decil 1 bem mais alto.",
+               "The new queue's distribution by decile is practically the same as the test set's, so the model is being applied to a "
+               "population similar to the one it trained on. The real-default-rate column shows each decile means what it promises: "
+               "decile 10 near 0%, decile 1 much higher."))
 
     st.markdown(L("**Política de crédito aplicada à fila** (usa o corte e as hipóteses de margem/prejuízo da aba Decisão)",
                 "**Credit policy applied to the queue** (uses the cutoff and margin/loss assumptions from the Decision tab)"))
@@ -649,11 +665,12 @@ with t4:
     tbc["rot"] = tbc.apply(lambda r: f"{nome(r.v)} = {r.valor:g}" if pd.notna(r.valor) else f"{nome(r.v)} = {nd}", axis=1)
     with c2_:
         dec = L("APROVAR", "APPROVE") if pc_ < best.corte else L("NEGAR", "DENY")
+        decil_cid = int(decil(pd.Series([pc_]), EDGES).iloc[0])
         st.markdown(L(
-            f"**Cliente {cid}** · prob. de inadimplência **{pc_:.1%}** · faixa **{faixa(pd.Series([pc_])).astype(str)[0]}** "
-            f"· decisão pelo corte de {best.corte:.1%}: **{dec}**",
-            f"**Customer {cid}** · default prob. **{pc_:.1%}** · band **{faixa(pd.Series([pc_])).astype(str)[0]}** "
-            f"· decision at the {best.corte:.1%} cutoff: **{dec}**",
+            f"**Cliente {cid}** · prob. de inadimplência **{pc_:.1%}** · decil **{decil_cid}** "
+            f"· decisão pelo corte no decil {melhor_decil}: **{dec}**",
+            f"**Customer {cid}** · default prob. **{pc_:.1%}** · decile **{decil_cid}** "
+            f"· decision at the decile-{melhor_decil} cutoff: **{dec}**",
         ))
         f = go.Figure(go.Bar(x=tbc.shap, y=tbc.rot, orientation="h", marker_color=[VERM if v > 0 else AZUL for v in tbc.shap]))
         f.update_layout(height=260, margin=dict(t=10, b=10),
@@ -769,19 +786,20 @@ with t5:
                      "PSI summarizes this picture into one number; here you can see the shape of the change — "
                      "whether the whole score shifted, or only the high-risk tail got fatter."))
     with c2m:
-        st.markdown(L("**Migração de faixa: quem mudou de risco**", "**Band migration: who changed risk**"))
-        fx0, fx1 = faixa(pd.Series(p0)).astype(str), faixa(pd.Series(p1)).astype(str)
-        mig = pd.DataFrame({L("Faixa hoje", "Band today"): fx0.value_counts(normalize=True).reindex(list(FAIXA_DESC)),
-                            L("Faixa no cenário", "Band in scenario"): fx1.value_counts(normalize=True).reindex(list(FAIXA_DESC))})
+        st.markdown(L("**Migração de decil: quem mudou de risco**", "**Decile migration: who changed risk**"))
+        fx0, fx1 = decil(pd.Series(p0), EDGES), decil(pd.Series(p1), EDGES)
+        mig = pd.DataFrame({L("Decil hoje", "Decile today"): fx0.value_counts(normalize=True).reindex(range(1, 11)),
+                            L("Decil no cenário", "Decile in scenario"): fx1.value_counts(normalize=True).reindex(range(1, 11))})
         fm = go.Figure()
         fm.add_bar(x=mig.index, y=mig.iloc[:, 0], name=mig.columns[0], marker_color=CINZA)
         fm.add_bar(x=mig.index, y=mig.iloc[:, 1], name=mig.columns[1], marker_color=VERM)
         fm.update_layout(barmode="group", height=300, margin=dict(t=10), yaxis_tickformat=".0%",
+                         xaxis=dict(title=L("Decil (1 = mais arriscado)", "Decile (1 = riskiest)"), dtick=1),
                          yaxis_title=L("% da base", "% of data"))
         st.plotly_chart(fm, width="stretch")
-        st.caption(L("Se as faixas de maior risco (D, E) crescem no cenário simulado, é um sinal concreto de que a "
+        st.caption(L("Se os decis de maior risco (1, 2) crescem no cenário simulado, é um sinal concreto de que a "
                      "política de corte atual aprovaria gente mais arriscada do que o esperado, mesmo sem retreinar o modelo.",
-                     "If the riskier bands (D, E) grow under the simulated scenario, that's a concrete sign the "
+                     "If the riskier deciles (1, 2) grow under the simulated scenario, that's a concrete sign the "
                      "current cutoff policy would approve riskier customers than expected, even without retraining the model."))
 
 # ------------------------------------------------------------------ 5 limites
