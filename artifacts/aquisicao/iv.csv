@@ -1,0 +1,50 @@
+variavel,iv,forca
+SCORE do modelo escolhido,1.2811713588087201,suspeito
+dias desde último contato,0.5605453639841802,suspeito
+nunca_contatado_antes,0.5541057260304205,suspeito
+resultado campanha anterior = success,0.5179369606195645,suspeito
+contatos anteriores,0.3519487741259251,forte
+resultado campanha anterior = nonexistent,0.282464776620055,médio
+canal = telephone,0.24549145622594165,médio
+mês = may,0.14035268570852308,médio
+idade,0.13718914335523824,médio
+inadimplente = unknown,0.12667236303543136,médio
+mês = mar,0.10741384116048128,médio
+mês = oct,0.1056627620826976,médio
+mês = sep,0.0890692457827093,fraco
+profissão = blue-collar,0.06437863046635492,fraco
+profissão = retired,0.0620856161256236,fraco
+contatos nesta campanha,0.05359045720146047,fraco
+profissão = student,0.05338620449586812,fraco
+mês = dec,0.03554907668641859,fraco
+estado civil = single,0.030756514485209007,fraco
+escolaridade = university.degree,0.02598186064464383,fraco
+escolaridade = basic.9y,0.02589124457174001,fraco
+estado civil = married,0.019657359680004177,sem poder
+profissão = services,0.013547463881360544,sem poder
+mês = jul,0.009405196626446212,sem poder
+escolaridade = basic.6y,0.00570298831148387,sem poder
+escolaridade = unknown,0.00498243006124425,sem poder
+profissão = entrepreneur,0.002855595102941682,sem poder
+dia da semana = mon,0.002792429157075291,sem poder
+profissão = unemployed,0.0023820553413043495,sem poder
+dia da semana = thu,0.0013989117058571955,sem poder
+mês = nov,0.001387014769885247,sem poder
+mês = jun,0.0011866777880742497,sem poder
+financ. imobiliário = yes,0.0009339761175675202,sem poder
+escolaridade = high.school,0.0008750825236013156,sem poder
+estado civil = unknown,0.0005291180382497078,sem poder
+mês = aug,0.0005130165889802828,sem poder
+profissão = housemaid,0.00040750883085978657,sem poder
+profissão = technician,0.0003715046558889769,sem poder
+dia da semana = tue,0.00028200281698006384,sem poder
+escolaridade = illiterate,0.0002173833379364138,sem poder
+dia da semana = wed,0.00020908111870280443,sem poder
+profissão = unknown,0.00010949720441981705,sem poder
+profissão = self-employed,6.721077141504666e-05,sem poder
+profissão = management,3.219577459670988e-05,sem poder
+empréstimo pessoal = yes,2.494304270024285e-06,sem poder
+escolaridade = professional.course,4.6414772260138125e-07,sem poder
+financ. imobiliário = unknown,4.1537029213025524e-07,sem poder
+empréstimo pessoal = unknown,4.1537029213025524e-07,sem poder
+inadimplente = yes,6.757834178415658e-08,sem poder

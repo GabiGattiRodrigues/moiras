@@ -1,0 +1,46 @@
+variavel,iv,forca
+SCORE do modelo escolhido,3.0060537060485295,suspeito
+Anos na empresa,0.4443826828728167,forte
+Anos de carreira,0.43810810596212246,forte
+Anos com o gestor atual,0.4181944176051482,forte
+Salário mensal,0.414491669695556,forte
+Idade,0.37526431882331523,forte
+Anos no cargo atual,0.3324888701244708,forte
+Nível do cargo,0.3303546540731368,forte
+Hora extra = Yes,0.32671691986471085,forte
+Nível de stock options,0.3169360698185108,forte
+Estado civil = Single,0.21678092748469868,médio
+Empresas anteriores,0.17996346280236067,médio
+Envolvimento no trabalho,0.14194961161121278,médio
+Função = Research Director,0.137605684748139,médio
+Função = Sales Representative,0.12976809383961324,médio
+Distância de casa,0.11770317641698244,médio
+Função = Laboratory Technician,0.10991491602310681,médio
+Satisfação com ambiente,0.10985375288043478,médio
+Equilíbrio vida-trabalho,0.10714487321912844,médio
+Viagens a trabalho = Travel_Frequently,0.08740941619892481,fraco
+Estado civil = Married,0.08583191097631648,fraco
+Diária,0.08037836384492938,fraco
+Departamento = Research & Development,0.07433709324202889,fraco
+Satisfação com o trabalho,0.07341270845562875,fraco
+Função = Manufacturing Director,0.07293651213514693,fraco
+Departamento = Sales,0.0650503178177745,fraco
+% último aumento,0.06214054358878022,fraco
+Anos desde a última promoção,0.056357099118595794,fraco
+Treinamentos no último ano,0.054583089011095015,fraco
+Função = Manager,0.05346661508193753,fraco
+Valor hora,0.048198681980493215,fraco
+Escolaridade (1-5),0.036737682605759735,fraco
+Área de formação = Marketing,0.030575931705047167,fraco
+Taxa mensal,0.028909804664317754,fraco
+Satisfação com relacionamentos,0.02581594511287765,fraco
+Área de formação = Other,0.019074916565688858,sem poder
+Viagens a trabalho = Travel_Rarely,0.016302111657501967,sem poder
+Função = Research Scientist,0.014314387183439334,sem poder
+Área de formação = Medical,0.012374490099445615,sem poder
+Função = Sales Executive,0.010155808806044565,sem poder
+Função = Human Resources,0.009527924082595318,sem poder
+Área de formação = Technical Degree,0.007636548228917624,sem poder
+Gênero = Male,0.005737100826703351,sem poder
+Área de formação = Life Sciences,0.0033139854740887667,sem poder
+Avaliação de desempenho,0.0006411629615819087,sem poder

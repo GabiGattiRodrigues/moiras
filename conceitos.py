@@ -61,7 +61,40 @@ CONCEITOS = {
          "servem mais tão bem porque as pessoas da loja mudaram de tamanho médio — o modelo foi \"vestido\" pensando "
          "num público que já não é bem o de agora.\n\n"
          "**Escala (regra de bolso do mercado):** `< 0,10` estável, sem alerta · `0,10 – 0,25` mudança moderada, vale "
-         "vigiar · `> 0,25` mudança grande — a população mudou o bastante para o modelo merecer revisão ou retreino."),
+         "vigiar · `> 0,25` mudança grande — a população mudou o bastante para o modelo merecer revisão ou retreino.\n\n"
+         "**Por dentro:** o PSI é a soma de duas divergências KL, uma em cada direção. Veja o próximo verbete."),
+
+        ("🧭 Divergência KL e Jensen-Shannon — o PSI por dentro",
+         "**O que é:** a divergência de Kullback-Leibler (KL) mede o quanto uma distribuição **surpreende** quem "
+         "esperava outra. Ela não é simétrica: comparar hoje com o treino dá um número diferente de comparar o "
+         "treino com hoje, e cada direção conta uma história.\n\n"
+         "**Exemplo para maior entendimento:** pense num restaurante que você conhece pelos pedidos de sempre (o "
+         "treino). **KL(hoje ‖ treino)** é a sua surpresa olhando os pedidos de hoje: um prato que quase ninguém "
+         "pedia e hoje todo mundo pede surpreende muito. **KL(treino ‖ hoje)** é o contrário: um prato que todo mundo "
+         "pedia e hoje sumiu. No modelo, a primeira acende quando aparece gente num perfil que ele viu pouco; a "
+         "segunda, quando some gente de onde ele estava acostumado.\n\n"
+         "**Como calcular em 1 frase:** em cada faixa, multiplique o % de hoje pelo log de (% hoje ÷ % treino) e "
+         "some; a outra direção troca os papéis. **PSI = KL(hoje ‖ treino) + KL(treino ‖ hoje)**, conta exata.\n\n"
+         "**E o Jensen-Shannon (JS)?** É outra forma simétrica: compara cada base com a **média** das duas. Vantagem: "
+         "nunca explode quando uma faixa fica vazia (a KL precisa de um piso artificial para não dividir por zero) e "
+         "tem teto, 0,693. Para mudanças pequenas, JS ≈ PSI ÷ 8, então a régua do PSI vira mais ou menos `< 0,0125` "
+         "estável · `> 0,03` mudança grande.\n\n"
+         "**Cuidado com base pequena:** mesmo sem mudança nenhuma, o PSI entre duas amostras não dá zero. O piso de "
+         "ruído é mais ou menos (nº de faixas − 1) × (1/n₁ + 1/n₂). Com 1.100 e 370 pessoas, isso já dá 0,03."),
+
+        ("🧲 IV e WoE — quanto uma variável separa sozinha",
+         "**O que é:** o Information Value (IV) mede o quanto uma variável, **sozinha e antes de qualquer modelo**, "
+         "separa quem teve o evento (calote, saída, compra) de quem não teve. É a **mesma conta do PSI**: em vez de "
+         "comparar treino com hoje, compara a distribuição do grupo com evento com a do grupo sem.\n\n"
+         "**Exemplo para maior entendimento:** se você separa os clientes em faixas de idade e os caloteiros se "
+         "espalham por todas as faixas igualzinho aos bons pagadores, a idade não ajuda em nada (IV ≈ 0). Se os "
+         "caloteiros se amontoam nas faixas mais jovens, a idade separa (IV alto).\n\n"
+         "**WoE (Weight of Evidence):** é o número de cada faixa, ln(% do grupo sem evento ÷ % do grupo com evento). "
+         "Negativo: a faixa concentra o evento. Positivo: concentra quem não teve. O IV soma, faixa a faixa, "
+         "(diferença de %) × WoE.\n\n"
+         "**Escala (regra de bolso de crédito):** `< 0,02` sem poder · `0,02–0,1` fraco · `0,1–0,3` médio · "
+         "`0,3–0,5` forte · `> 0,5` suspeito. \"Suspeito\" não quer dizer errado: quer dizer bom demais, vale "
+         "conferir se a variável não vaza a resposta. Histórico de atraso em crédito é forte assim de forma legítima."),
 
         ("📉 Decis e Lift — o modelo separa melhor que o acaso?",
          "**O que é:** divida todo mundo em 10 grupos (decis) do risco mais alto para o mais baixo previsto pelo "
@@ -234,7 +267,42 @@ CONCEITOS = {
          "quite today's audience anymore.\n\n"
          "**Scale (industry rule of thumb):** `< 0.10` stable, no alert · `0.10 – 0.25` moderate shift, worth "
          "watching · `> 0.25` big shift — the population changed enough that the model deserves a review or "
-         "retraining."),
+         "retraining.\n\n"
+         "**Under the hood:** PSI is the sum of two KL divergences, one in each direction. See the next entry."),
+
+        ("🧭 KL divergence and Jensen-Shannon — PSI under the hood",
+         "**What it is:** the Kullback-Leibler (KL) divergence measures how much one distribution **surprises** "
+         "someone who expected another. It isn't symmetric: comparing today to training gives a different number "
+         "than comparing training to today, and each direction tells a different story.\n\n"
+         "**Example for easier understanding:** think of a restaurant you know by its usual orders (training). "
+         "**KL(today ‖ train)** is your surprise looking at today's orders: a dish almost nobody ordered that "
+         "everyone orders today is a big surprise. **KL(train ‖ today)** is the reverse: a dish everyone ordered "
+         "that vanished today. In the model, the first lights up when people show up in a profile it barely saw; "
+         "the second, when people disappear from where it was used to seeing them.\n\n"
+         "**How to compute it in 1 sentence:** in each bin, multiply today's % by the log of (today % ÷ training %) "
+         "and add them up; the other direction swaps the roles. **PSI = KL(today ‖ train) + KL(train ‖ today)**, "
+         "exactly.\n\n"
+         "**What about Jensen-Shannon (JS)?** It's another symmetric version: it compares each dataset to the "
+         "**average** of the two. Upside: it never blows up when a bin goes empty (KL needs an artificial floor to "
+         "avoid dividing by zero) and it has a ceiling, 0.693. For small changes, JS ≈ PSI ÷ 8, so the PSI rule "
+         "becomes roughly `< 0.0125` stable · `> 0.03` big shift.\n\n"
+         "**Watch out for small data:** even with no change at all, PSI between two samples isn't zero. The noise "
+         "floor is roughly (number of bins − 1) × (1/n₁ + 1/n₂). With 1,100 and 370 people, that's already 0.03."),
+
+        ("🧲 IV and WoE — how much a variable separates on its own",
+         "**What it is:** Information Value (IV) measures how much a variable, **on its own and before any model**, "
+         "separates those who had the event (default, exit, purchase) from those who didn't. It's **the same math "
+         "as PSI**: instead of comparing training to today, it compares the distribution of the group with the "
+         "event to the group without it.\n\n"
+         "**Example for easier understanding:** if you split customers into age bands and defaulters spread across "
+         "every band exactly like good payers, age doesn't help at all (IV ≈ 0). If defaulters pile up in the "
+         "youngest bands, age separates (high IV).\n\n"
+         "**WoE (Weight of Evidence):** each bin's number, ln(% of the group without event ÷ % of the group with "
+         "event). Negative: the bin concentrates the event. Positive: it concentrates those without it. IV adds up, "
+         "bin by bin, (difference in %) × WoE.\n\n"
+         "**Scale (credit rule of thumb):** `< 0.02` no power · `0.02–0.1` weak · `0.1–0.3` medium · `0.3–0.5` "
+         "strong · `> 0.5` suspicious. \"Suspicious\" doesn't mean wrong: it means too good, worth checking that "
+         "the variable doesn't leak the answer. Delinquency history in credit is legitimately this strong."),
 
         ("📉 Deciles and Lift — does the model separate better than chance?",
          "**What it is:** split everyone into 10 groups (deciles) from the highest to the lowest risk predicted by "

@@ -1,0 +1,17 @@
+variavel,iv,forca
+SCORE (prob. XGBoost),2.196373015703556,suspeito
+atrasos_total,1.3673410288167174,suspeito
+uso_limite,1.113811256110731,suspeito
+atraso_90,0.8504129506786483,suspeito
+tem_atraso_grave,0.795604822932417,suspeito
+atraso_30_59,0.7337859585567558,suspeito
+atraso_60_89,0.6048627993719473,suspeito
+idade,0.2469632264717421,médio
+renda_per_capita,0.09993929926231934,fraco
+renda_mensal,0.07363554714427786,fraco
+razao_divida,0.0728023923690451,fraco
+linhas_credito,0.07161680024503601,fraco
+financ_imoveis,0.06493017274408977,fraco
+atraso_codigo,0.04238190147971277,fraco
+dependentes,0.03408978576086013,fraco
+renda_faltante,0.0078083868857649185,sem poder

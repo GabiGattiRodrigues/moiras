@@ -1,7 +1,7 @@
 """Case 1 do Moiras — risco de crédito (Give Me Some Credit, Kaggle).
 
 Roda o pipeline completo e grava tudo em artifacts/credito/ para o app ler:
-  baseline (regressão logística) x XGBoost, KS/AUC/lift, calibração, PSI, SHAP.
+  baseline (regressão logística) x XGBoost, KS/AUC/lift, calibração, PSI/KL/JS, IV, SHAP.
 
 Uso:  python train_credito.py --data data/
 """
@@ -23,7 +23,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from moiras.credito import TARGET, fit_caps, log_features, prepare, padronizar
-from moiras.metrics import calibration_table, decile_table, psi, summary
+from moiras.metrics import calibration_table, decile_table, exportar_divergencias, summary
 
 SEED = 42
 
@@ -100,14 +100,13 @@ def main(data_dir: str, out_dir: str) -> None:
     calibration_table(yte, p_lr).to_csv(out / "calibracao_lr.csv", index=False)
     pd.DataFrame({"y": yte.to_numpy(), "p_xgb": p_xgb, "p_lr": p_lr}).to_csv(out / "scores_teste.csv", index=False)
 
-    # --- PSI: base de treino (referência) x base de teste do Kaggle (features) e x score
+    # --- Divergências: base de treino (referência) x base de teste do Kaggle (fila nova, sem rótulo)
     test_raw = load(Path(data_dir) / "cs-test.csv").drop(columns=[TARGET], errors="ignore")
     Xkt = prep(test_raw)[X.columns]
     Xkt.to_csv(out / "base_nova.csv.gz")  # fila de propostas novas (sem rótulo) que o app vai pontuar
-    rows = [{"variavel": c, "psi": psi(Xtr[c], Xkt[c])} for c in X.columns]
-    rows.append({"variavel": "SCORE (prob. XGBoost)", "psi": psi(model.predict_proba(Xtr)[:, 1],
-                                                                model.predict_proba(Xkt)[:, 1])})
-    pd.DataFrame(rows).sort_values("psi", ascending=False).to_csv(out / "psi.csv", index=False)
+    # PSI, KL nas duas direções e Jensen-Shannon (treino x fila nova) + IV de cada variável e do score (no treino)
+    exportar_divergencias(Xtr, ytr, Xkt, model.predict_proba(Xtr)[:, 1], model.predict_proba(Xkt)[:, 1], out,
+                          "SCORE (prob. XGBoost)", p_teste=p_xgb, y_teste=yte)
 
     # --- SHAP (amostra de 3000 do teste)
     samp = Xte.sample(3000, random_state=SEED)

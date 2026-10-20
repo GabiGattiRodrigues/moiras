@@ -12,6 +12,7 @@ import streamlit as st
 from moiras.compare import SLUG
 from moiras.lang import L, lang
 from moiras.metrics import profit_by_decile_acao
+from moiras.ui_divergencia import bloco_iv, explicacao, tabela_psi
 
 ROOT = Path(__file__).resolve().parent.parent
 AZUL, AZUL_ESC, CINZA, VERM, VERDE = "#1f5fbf", "#0b2a5b", "#9aa5b1", "#d1495b", "#2a9d6f"
@@ -69,6 +70,7 @@ def carregar(caso: str) -> dict:
         "dec": {m: r(f"decis_{s}.csv") for m, s in SLUG.items()},
         "cal": {m: r(f"calibracao_{s}.csv") for m, s in SLUG.items()},
         "rf_ranking": r("rf_ranking.csv"), "rf_dots": rf_dots,
+        "psi": r("psi.csv"), "iv": r("iv.csv"), "iv_faixas": r("iv_faixas.csv"),
     }
     if (d / "logistica_contrib.csv").exists():
         dados["lr_contrib"] = pd.read_csv(d / "logistica_contrib.csv", index_col=0)
@@ -120,9 +122,9 @@ def render(caso: str) -> None:
     st.caption(L(f"Treino {n_tr} · teste {n_te} ({unidade}s que o modelo nunca viu).",
                  f"Train {n_tr} · test {n_te} ({unidade}s the model never saw)."))
 
-    abas = ["1 · The contest", "2 · Decision", "3 · Explanation", "4 · Limitations"] if lang() == "en" else \
-           ["1 · A disputa", "2 · Decisão", "3 · Explicação", "4 · Limites"]
-    t1, t2, t3, t4 = st.tabs(abas)
+    abas = ["1 · The contest", "2 · Decision", "3 · Explanation", "4 · Monitoring", "5 · Limitations"] \
+        if lang() == "en" else ["1 · A disputa", "2 · Decisão", "3 · Explicação", "4 · Monitoramento", "5 · Limites"]
+    t1, t2, t3, t4, t5 = st.tabs(abas)
 
     # ------------------------------------------------------------ disputa
     with t1:
@@ -497,8 +499,30 @@ def render(caso: str) -> None:
             "don't repeat across the others.",
         ))
 
-    # ------------------------------------------------------------ limites
+        st.divider()
+        bloco_iv(D["iv"], D["iv_faixas"], lambda v: v, "SCORE do modelo escolhido", evento, key=caso)
+
+    # ------------------------------------------------------------ monitoramento
     with t4:
+        st.subheader(L("O modelo continua valendo amanhã?", "Will the model still hold up tomorrow?"))
+        explicacao()
+        st.markdown(L(f"**Treino × teste**, nas variáveis contínuas e no score do modelo escolhido ({esc}):",
+                      f"**Train × test**, on the continuous variables and the chosen model's score ({mnome(esc)}):"))
+        score_en = {"SCORE do modelo escolhido": "SCORE of the chosen model"}
+        tabela_psi(D["psi"], lambda v: score_en.get(v, v) if lang() == "en" else v, meta["n_treino"], meta["n_teste"],
+                   (f"{unidade}s", f"test {unidade}s") if lang() == "en" else (f"{unidade}s", f"{unidade}s do teste"))
+        st.info(L(
+            "Aqui o teste é um sorteio da mesma base, então não há mudança de população de verdade: o que aparece "
+            "é ruído de amostra. Por isso vale olhar o piso de ruído antes da régua de 0,10 — com base pequena, um "
+            "PSI \"alto\" pode ser só sorteio. Para ver um alerta de verdade disparar, o case de crédito tem um "
+            "teste de estresse na aba Monitoramento.",
+            "Here the test set is a random draw from the same data, so there's no real population change: what "
+            "shows up is sampling noise. That's why it pays to check the noise floor before the 0.10 rule — with "
+            "small data, a \"high\" PSI can be just chance. To see a real alert fire, the credit case has a stress "
+            "test on its Monitoring tab."))
+
+    # ------------------------------------------------------------ limites
+    with t5:
         st.subheader(L("O que este case não prova", "What this case doesn't prove"))
         notas = _m(meta, caso, "notas") if caso in META_EN and lang() == "en" else meta["notas"]
         st.markdown("\n".join(f"- {n}" for n in notas))

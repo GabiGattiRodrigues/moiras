@@ -18,7 +18,7 @@ from sklearn.model_selection import (RepeatedStratifiedKFold, TimeSeriesSplit,
                                      train_test_split)
 
 from moiras.compare import SEED, SLUG, disputar, exportar_dt_real, exportar_rf_arvores
-from moiras.metrics import calibration_table, decile_table, psi, summary
+from moiras.metrics import calibration_table, decile_table, exportar_divergencias, summary
 
 BOOSTING = ("XGBoost", "LightGBM", "CatBoost")
 
@@ -169,11 +169,10 @@ def salvar(res, Xtr, ytr, Xte, yte, meta, out: Path) -> None:
     if esc in BOOSTING:
         meta["shap_base"] = exportar_shap(res.ajustados[esc], Xte, out)
 
-    # PSI treino x teste por variável e pelo score do modelo escolhido
+    # PSI, KL nas duas direções e Jensen-Shannon (treino x teste) + IV de cada variável e do score (no treino)
     ptr = res.ajustados[esc].predict_proba(Xtr)[:, 1]
-    rows = [{"variavel": c, "psi": psi(Xtr[c], Xte[c])} for c in Xtr.columns if Xtr[c].nunique() > 2]
-    rows.append({"variavel": "SCORE do modelo escolhido", "psi": psi(ptr, p.to_numpy())})
-    pd.DataFrame(rows).sort_values("psi", ascending=False).to_csv(out / "psi.csv", index=False)
+    exportar_divergencias(Xtr, ytr, Xte, ptr, p.to_numpy(), out, "SCORE do modelo escolhido",
+                          p_teste=p.to_numpy(), y_teste=yte, so_continuas=True)
 
     meta.update({"n_treino": len(Xtr), "n_teste": len(Xte), "taxa_treino": float(ytr.mean()),
                  "taxa_teste": float(yte.mean()), "escolhido": esc, "melhor_cv": res.melhor_cv})

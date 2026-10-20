@@ -12,6 +12,7 @@ from moiras.compare import SLUG
 from moiras.credito import ENTRADAS, RENAME, decil, decil_edges, padronizar, prepare
 from moiras.lang import L, lang
 from moiras.metrics import profit_by_decile, psi
+from moiras.ui_divergencia import bloco_iv, decomposicao, explicacao, tabela_psi
 
 COR4 = {"Regressão logística": "#1f5fbf", "Árvore de decisão": "#e0a030", "Random forest": "#2a9d6f",
         "XGBoost": "#d1495b", "LightGBM": "#8a5fd1", "CatBoost": "#c77b2e"}
@@ -54,6 +55,7 @@ def carregar():
         "scores": r("scores_teste.csv"), "dec": r("decis_xgb.csv"), "dec_lr": r("decis_lr.csv"),
         "cal": r("calibracao_xgb.csv"), "cal_lr": r("calibracao_lr.csv"),
         "psi": r("psi.csv"), "imp": r("shap_importancia.csv"),
+        "iv": r("iv.csv"), "iv_faixas": r("iv_faixas.csv"),
         "shap": pd.read_csv(ART / "shap_valores.csv", index_col=0),
         "feat": pd.read_csv(ART / "shap_features.csv", index_col=0),
     }
@@ -577,6 +579,9 @@ with t3:
                    f"{cauc.loc['Random forest', 'teste_auc']:.3f} — the pack does better because each tree's "
                    "mistakes generally don't repeat across the others."))
 
+    st.divider()
+    bloco_iv(D["iv"], D["iv_faixas"], nome, "SCORE (prob. XGBoost)", L("inadimplência", "default"), key="credito")
+
 # ------------------------------------------------------------------ 4 base nova
 with t4:
     st.subheader(L("Na vida real: uma fila de propostas que o modelo nunca viu", "In real life: a queue of applications the model never saw"))
@@ -709,33 +714,24 @@ with t4:
 # ------------------------------------------------------------------ 5 monitoramento
 with t5:
     st.subheader(L("O modelo continua valendo amanhã?", "Will the model still hold up tomorrow?"))
-    st.markdown(L(
-        "**PSI** mede quanto a distribuição de uma variável (ou do score) mudou em relação à base de treino — não "
-        "mede se o modelo acerta, mede se o mundo que ele está vendo hoje ainda parece com o mundo em que ele "
-        "aprendeu. Regra de bolso: `< 0,10` estável · `0,10–0,25` atenção · `> 0,25` população mudou. "
-        "Explicação completa na aba **Conceitos**.",
-        "**PSI** measures how much a variable's (or the score's) distribution changed relative to the training "
-        "data — it doesn't measure whether the model is accurate, it measures whether the world it's seeing today "
-        "still looks like the world it learned from. Rule of thumb: `< 0.10` stable · `0.10–0.25` watch closely · "
-        "`> 0.25` population changed. Full explanation on the **Concepts** tab.",
-    ))
-    ps = D["psi"].copy()
-    ps["variavel"] = ps.variavel.map(nome)
-    if lang() == "en":
-        ps = ps.rename(columns={"variavel": "variable", "psi": "psi"})
-    st.dataframe(ps.style.format({c: "{:.4f}" for c in ps.columns if c != ("variable" if lang() == "en" else "variavel")}),
-                 width="stretch", hide_index=True, height=250)
+    explicacao()
+    tabela_psi(D["psi"], nome, M["n_treino"], len(base_nova()[0]),
+               ("customers", "applications in the new queue") if lang() == "en"
+               else ("clientes", "propostas da fila nova"))
     st.info(L(
-        "O PSI real dá praticamente zero porque a base de teste do Kaggle é um sorteio aleatório da mesma população. "
-        "Isso mostra que o cálculo funciona, mas não mostra um alerta. Para ver o alerta disparar, use o teste de estresse abaixo.",
-        "The real PSI comes out near zero because Kaggle's test set is a random draw from the same population. "
+        "O PSI real dá praticamente zero (no nível do piso de ruído) porque a base de teste do Kaggle é um sorteio "
+        "aleatório da mesma população. Isso mostra que o cálculo funciona, mas não mostra um alerta. Para ver o alerta disparar, use o teste de estresse abaixo.",
+        "The real PSI comes out near zero (at the noise floor) because Kaggle's test set is a random draw from the "
+        "same population. "
         "That shows the calculation works, but doesn't trigger an alert. To see the alert fire, use the stress "
         "test below.",
     ))
     st.markdown(L("**Teste de estresse: e se a população mudar?**", "**Stress test: what if the population changes?**"))
     a, b = st.columns(2)
-    cenarios_pt = ["Clientes mais endividados (uso do limite ↑)", "Queda de renda", "Mais atrasos recentes"]
-    cenarios_en = ["More indebted customers (limit usage ↑)", "Income drop", "More recent late payments"]
+    cenarios_pt = ["Clientes mais endividados (uso do limite ↑)", "Queda de renda", "Mais atrasos recentes",
+                   "Público novo entrando (perfil raro no treino)", "Pré-filtro barra quem usa 80%+ do limite"]
+    cenarios_en = ["More indebted customers (limit usage ↑)", "Income drop", "More recent late payments",
+                   "New audience coming in (profile rare in training)", "Pre-filter blocks 80%+ limit usage"]
     cen_disp = a.selectbox(L("Cenário", "Scenario"), cenarios_en if lang() == "en" else cenarios_pt)
     cen = cenarios_pt[cenarios_en.index(cen_disp)] if lang() == "en" else cen_disp
     inten = b.slider(L("Intensidade", "Intensity"), 0.0, 1.0, 0.4, 0.05)
@@ -748,6 +744,18 @@ with t5:
         est["renda_mensal"] = est["renda_mensal"] * (1 - 0.5 * inten)
         est["renda_per_capita"] = est["renda_mensal"] / (1 + est["dependentes"].fillna(0))
         var = "renda_mensal"
+    elif cen.startswith("Público"):
+        # troca até 25% da base por gente com atraso 90+ (5% no treino): um perfil que o modelo viu pouco ganha peso
+        rng = np.random.default_rng(1)
+        n = int(len(est) * 0.25 * inten)
+        rara = base[base["tem_atraso_grave"] == 1]
+        est.iloc[rng.choice(len(est), n, replace=False)] = rara.sample(n, replace=True, random_state=1).to_numpy()
+        var = "atraso_90"
+    elif cen.startswith("Pré"):
+        # uma política nova recusa, antes do modelo, parte de quem usa 80%+ do limite: faixas de risco alto esvaziam
+        corta = (est["uso_limite"] >= 0.8) & (np.random.default_rng(1).random(len(est)) < inten)
+        est = est[~corta]
+        var = "uso_limite"
     else:
         add = np.random.default_rng(1).binomial(1, min(inten, 1) * 0.5, len(est))
         est["atraso_30_59"] = est["atraso_30_59"].fillna(0) + add
@@ -770,6 +778,8 @@ with t5:
                 "porque ela só é observada 2 anos depois.",
                 f"Score status: **{nivel}**. In a real pipeline, this alert fires before the default even shows up, "
                 "because it's only observed 2 years later."))
+
+    decomposicao(p0, p1, key="estresse_credito")
 
     st.divider()
     c1m, c2m = st.columns(2)

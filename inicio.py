@@ -91,8 +91,8 @@ with c3:
 with c4:
     st.page_link("conceitos.py", label="Conceitos / Concepts", icon="📚")
     st.caption(L(
-        "Não conhece AUC, KS, PSI, SHAP...? Glossário completo, em português e inglês, sem jargão.",
-        "Don't know AUC, KS, PSI, SHAP...? Full glossary, in Portuguese and English, jargon-free.",
+        "Não conhece AUC, KS, PSI, KL, IV, SHAP...? Glossário completo, em português e inglês, sem jargão.",
+        "Don't know AUC, KS, PSI, KL, IV, SHAP...? Full glossary, in Portuguese and English, jargon-free.",
     ))
 
 st.divider()
